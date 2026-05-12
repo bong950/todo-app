@@ -439,6 +439,31 @@
     color: var(--text-secondary);
     text-align: center;
   }
+  .upcoming-comment {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 160px;
+    border-bottom: 1px dashed transparent;
+    transition: border-color 0.15s;
+  }
+  .upcoming-comment:hover { border-color: var(--text-secondary); }
+  .upcoming-comment.empty { color: #bbb; font-style: italic; }
+  .upcoming-comment-input {
+    font-size: 11px;
+    color: var(--text-primary);
+    border: none;
+    border-bottom: 1px solid #4285f4;
+    background: transparent;
+    outline: none;
+    width: 140px;
+    padding: 0;
+    font-family: inherit;
+  }
 
   /* 모바일 탭 네비게이션 */
   .mobile-tabs {
@@ -1899,6 +1924,8 @@ function renderUpcoming() {
 
   upcoming.slice(0, 10).forEach(ev => {
     const isToday = ev.date.toDateString() === todayStr;
+    const commentKey = makeCommentKey(ev.title, ev.date);
+    const commentText = eventComments[commentKey] || '';
     const item = document.createElement('div');
     item.className = 'upcoming-item';
     item.innerHTML = `
@@ -1909,10 +1936,53 @@ function renderUpcoming() {
       <div class="upcoming-info">
         <div class="upcoming-title">${escHtml(ev.title)}</div>
         <div class="upcoming-time">${isToday ? '오늘 · ' : ''}${ev.timeStr}</div>
+        <div class="upcoming-comment ${commentText ? '' : 'empty'}">${escHtml(commentText) || '메모 추가...'}</div>
       </div>
       <span class="upcoming-dot"></span>
     `;
+    const commentEl = item.querySelector('.upcoming-comment');
+    attachCommentEdit(commentEl, commentKey);
     list.appendChild(item);
+  });
+}
+
+// ── Event Comments ─────────────────────────────────────────────────────────
+const EVENT_COMMENTS_KEY = 'event_comments';
+let eventComments = {};
+
+function loadEventComments() {
+  try { eventComments = JSON.parse(localStorage.getItem(EVENT_COMMENTS_KEY)) || {}; } catch(e) { eventComments = {}; }
+}
+
+function saveEventComment(key, text) {
+  eventComments[key] = text;
+  localStorage.setItem(EVENT_COMMENTS_KEY, JSON.stringify(eventComments));
+}
+
+function makeCommentKey(title, date) {
+  return `${title}_${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function attachCommentEdit(el, key) {
+  el.addEventListener('click', () => {
+    const current = eventComments[key] || '';
+    const input = document.createElement('input');
+    input.className = 'upcoming-comment-input';
+    input.value = current;
+    input.placeholder = '메모 입력...';
+    el.replaceWith(input);
+    input.focus();
+    const finish = () => {
+      const val = input.value.trim();
+      saveEventComment(key, val);
+      const newEl = document.createElement('div');
+      newEl.className = 'upcoming-comment' + (val ? '' : ' empty');
+      newEl.textContent = val || '메모 추가...';
+      input.replaceWith(newEl);
+      attachCommentEdit(newEl, key);
+    };
+    input.addEventListener('blur', finish);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
   });
 }
 
@@ -1977,6 +2047,7 @@ function deleteLocalEvent(key, id) {
 }
 
 loadLocalEvents();
+loadEventComments();
 renderUpcoming();
 
 function showDayEvents(y, m, d) {
