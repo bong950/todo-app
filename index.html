@@ -1060,6 +1060,52 @@ const STORAGE_KEY = 'todo_data_v2';
 
 let data = loadData();
 
+// ── Undo ───────────────────────────────────────────────────────────────────
+const undoStack = [];
+const MAX_UNDO = 30;
+
+function pushHistory() {
+  undoStack.push(JSON.stringify(data));
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+}
+
+function undo() {
+  if (undoStack.length === 0) return;
+  data = JSON.parse(undoStack.pop());
+  saveData();
+  render();
+  showUndoToast();
+}
+
+function showUndoToast() {
+  let toast = document.getElementById('undoToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'undoToast';
+    toast.style.cssText = `
+      position:fixed; bottom:28px; left:50%; transform:translateX(-50%);
+      background:#37352f; color:#fff; font-size:13px; padding:8px 18px;
+      border-radius:8px; z-index:999; opacity:0;
+      transition:opacity 0.2s; pointer-events:none; font-family:inherit;
+    `;
+    document.body.appendChild(toast);
+  }
+  toast.textContent = '↩ 실행 취소';
+  toast.style.opacity = '1';
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => { toast.style.opacity = '0'; }, 1200);
+}
+
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+    const active = document.activeElement;
+    // 텍스트 입력 중엔 기본 동작 유지
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.contentEditable === 'true')) return;
+    e.preventDefault();
+    undo();
+  }
+});
+
 function defaultData() {
   return {
     sections: [
@@ -1112,7 +1158,8 @@ function loadData() {
   return defaultData();
 }
 
-function saveData() {
+function saveData(addHistory = false) {
+  if (addHistory) pushHistory();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
@@ -1170,6 +1217,7 @@ function buildSection(sec) {
   hdr.querySelector('.section-del-btn').addEventListener('click', e => {
     e.stopPropagation();
     if (sec.items.length === 0 || confirm(`"${sec.name}" 섹션을 삭제할까요?`)) {
+      pushHistory();
       data.sections = data.sections.filter(s => s.id !== sec.id);
       render();
     }
@@ -1199,6 +1247,7 @@ function buildSection(sec) {
     ul.classList.remove('drag-target');
     if (!dragItem) return;
     if (dragFromSec.id !== sec.id) {
+      pushHistory();
       dragFromSec.items = dragFromSec.items.filter(i => i.id !== dragItem.id);
       sec.items.push(dragItem);
       dragItem = null; dragFromSec = null;
@@ -1228,6 +1277,7 @@ function buildSection(sec) {
     if (e.key === 'Enter') {
       const val = e.target.value.trim();
       if (val) {
+        pushHistory();
         sec.items.push({ id: uid(), text: val, done: false, sub: false, link: '' });
         render();
         // Re-focus after render
@@ -1273,13 +1323,13 @@ function buildItem(item, sec) {
     e.preventDefault();
     if (!dragItem || item.id === dragItem.id) return;
     // 같은 섹션 내 순서 변경
+    pushHistory();
     if (dragFromSec.id === sec.id) {
       const fromIdx = sec.items.findIndex(i => i.id === dragItem.id);
       const toIdx   = sec.items.findIndex(i => i.id === item.id);
       sec.items.splice(fromIdx, 1);
       sec.items.splice(toIdx, 0, dragItem);
     } else {
-      // 다른 섹션으로 이동
       dragFromSec.items = dragFromSec.items.filter(i => i.id !== dragItem.id);
       const toIdx = sec.items.findIndex(i => i.id === item.id);
       sec.items.splice(toIdx, 0, dragItem);
@@ -1313,6 +1363,7 @@ function buildItem(item, sec) {
 
   // Checkbox
   row.querySelector('input[type=checkbox]').addEventListener('change', e => {
+    pushHistory();
     item.done = e.target.checked;
     row.classList.toggle('done', item.done);
     // animate then re-render
@@ -1333,6 +1384,7 @@ function buildItem(item, sec) {
 
   // Sub-item toggle
   row.querySelector('.sub-btn').addEventListener('click', () => {
+    pushHistory();
     item.sub = !item.sub;
     render();
   });
@@ -1341,6 +1393,7 @@ function buildItem(item, sec) {
   row.querySelector('.link-btn').addEventListener('click', () => {
     const url = prompt('링크를 입력하세요:', item.link || 'https://');
     if (url !== null) {
+      pushHistory();
       item.link = url.trim();
       render();
     }
@@ -1348,6 +1401,7 @@ function buildItem(item, sec) {
 
   // Delete
   row.querySelector('.item-btn.del').addEventListener('click', () => {
+    pushHistory();
     sec.items = sec.items.filter(i => i.id !== item.id);
     render();
   });
@@ -1374,6 +1428,7 @@ function escHtml(s) {
 function addSection() {
   const name = prompt('새 섹션 이름을 입력하세요:', '새 섹션');
   if (name === null) return;
+  pushHistory();
   data.sections.push({
     id: uid(),
     name: name.trim() || '새 섹션',
