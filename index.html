@@ -1837,6 +1837,13 @@ function updateDate() {
 updateDate();
 render();
 
+function extractEventTime(ev) {
+  if (ev.start) return ev.start; // HH:MM
+  const m = (ev.name || '').match(/^(\d{1,2})시\s*(?:(\d{1,2})분)?/);
+  if (m) return `${m[1].padStart(2,'0')}:${(m[2]||'0').padStart(2,'0')}`;
+  return '99:99';
+}
+
 function renderUpcoming() {
   const card = document.getElementById('upcomingCard');
   const list = document.getElementById('upcomingList');
@@ -1857,6 +1864,7 @@ function renderUpcoming() {
           date,
           title: ev.name,
           timeStr: ev.start ? `${ev.start}${ev.end ? ' ~ ' + ev.end : ''}` : '종일',
+          sortTime: extractEventTime(ev),
           isLocal: true,
           localKey: key,
           localId: ev.id
@@ -1865,7 +1873,11 @@ function renderUpcoming() {
     }
   });
 
-  upcoming.sort((a, b) => a.date - b.date);
+  upcoming.sort((a, b) => {
+    const dateDiff = a.date - b.date;
+    if (dateDiff !== 0) return dateDiff;
+    return a.sortTime.localeCompare(b.sortTime);
+  });
 
   card.style.display = 'block';
   list.innerHTML = '';
@@ -2045,7 +2057,7 @@ renderUpcoming();
 
 function showDayEvents(y, m, d) {
   const key = `${y}-${m}-${d}`;
-  const localEvs  = localEvents[key] || [];
+  const localEvs  = [...(localEvents[key] || [])].sort((a, b) => extractEventTime(a).localeCompare(extractEventTime(b)));
   const panel = document.getElementById('calEventPanel');
   const list  = document.getElementById('calEventList');
   const months = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
