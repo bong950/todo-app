@@ -37,6 +37,53 @@
     --transition: 0.18s ease;
   }
 
+  body.dark {
+    --bg: #1a1917;
+    --surface: #252422;
+    --border: #3a3834;
+    --border-hover: #4e4b46;
+    --text-primary: #e8e6e1;
+    --text-secondary: #7a7570;
+    --text-done: #4e4b46;
+    --accent-light: #1c2f47;
+    --check-border: #4e4b46;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.4);
+  }
+
+  /* 다크모드 토글 버튼 */
+  .dark-toggle {
+    margin-left: 8px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    width: 36px;
+    height: 20px;
+    cursor: pointer;
+    position: relative;
+    transition: background var(--transition), border-color var(--transition);
+    flex-shrink: 0;
+  }
+  .dark-toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--text-secondary);
+    transition: transform var(--transition), background var(--transition);
+  }
+  body.dark .dark-toggle {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  body.dark .dark-toggle::after {
+    transform: translateX(16px);
+    background: #fff;
+  }
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   body {
@@ -299,8 +346,15 @@
     transition: all var(--transition);
   }
   .cal-add-event-btn:hover { background: var(--accent); color: #fff; }
+  .cal-local-edit {
+    background: transparent; border: none;
+    color: var(--text-secondary); cursor: pointer; font-size: 12px;
+    padding: 1px 4px; border-radius: 3px; opacity: 0; transition: all var(--transition);
+  }
+  .cal-event-item:hover .cal-local-edit { opacity: 1; }
+  .cal-local-edit:hover { background: var(--accent-light); color: var(--accent); }
   .cal-local-del {
-    margin-left: auto; background: transparent; border: none;
+    background: transparent; border: none;
     color: var(--text-secondary); cursor: pointer; font-size: 11px;
     padding: 1px 4px; border-radius: 3px; opacity: 0; transition: all var(--transition);
   }
@@ -436,6 +490,18 @@
     flex-shrink: 0;
     margin-top: 5px;
   }
+  .upcoming-edit {
+    display: block;
+    background: none;
+    border: none;
+    color: #ccc;
+    font-size: 15px;
+    cursor: pointer;
+    padding: 0 0 0 6px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .upcoming-edit:hover, .upcoming-edit:active { color: var(--accent); }
   .upcoming-delete {
     display: block;
     background: none;
@@ -1158,6 +1224,7 @@
   <span class="header-icon">📋</span>
   <span class="header-title">할 일 관리</span>
   <span class="header-date" id="headerDate"></span>
+  <button class="dark-toggle" id="darkToggle" onclick="toggleDark()" title="다크모드 전환"></button>
 </header>
 
 <nav class="mobile-tabs">
@@ -1255,6 +1322,16 @@
 </div>
 
 <script>
+// ── Dark Mode ──────────────────────────────────────────────────────────────
+(function() {
+  if (localStorage.getItem('darkMode') === '1') document.body.classList.add('dark');
+})();
+
+function toggleDark() {
+  const isDark = document.body.classList.toggle('dark');
+  localStorage.setItem('darkMode', isDark ? '1' : '0');
+}
+
 // ── Firebase ───────────────────────────────────────────────────────────────
 const FIREBASE_CONFIG = {
   apiKey:            "AIzaSyBGmKzQ4GvM4qZM3VrRe4kO34Wc38-ZaLo",
@@ -2003,11 +2080,17 @@ function renderUpcoming() {
         <div class="upcoming-time">${isToday ? '오늘 · ' : ''}${ev.timeStr}</div>
         <div class="upcoming-comment ${commentText ? '' : 'empty'}">${escHtml(commentText) || '메모 추가...'}</div>
       </div>
-      ${(ev.isLocal || ev.isGcal) ? '<button class="upcoming-delete">×</button>' : '<span class="upcoming-dot"></span>'}
+      <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">
+        ${ev.isLocal ? '<button class="upcoming-edit">✎</button>' : ''}
+        ${(ev.isLocal || ev.isGcal) ? '<button class="upcoming-delete">×</button>' : '<span class="upcoming-dot"></span>'}
+      </div>
     `;
     const commentEl = item.querySelector('.upcoming-comment');
     attachCommentEdit(commentEl, commentKey);
     if (ev.isLocal) {
+      item.querySelector('.upcoming-edit').addEventListener('click', () => {
+        openEditLocalEventModal(ev.localKey, ev.localId);
+      });
       item.querySelector('.upcoming-delete').addEventListener('click', () => {
         if (confirm(`"${ev.title}" 일정을 삭제할까요?`)) {
           deleteLocalEvent(ev.localKey, ev.localId);
@@ -2071,6 +2154,7 @@ function attachCommentEdit(el, key) {
 const LOCAL_EVENTS_KEY = 'local_cal_events';
 let localEvents = {};
 let localEventTarget = null; // { y, m, d }
+let localEventEditId = null; // null이면 추가 모드, id면 수정 모드
 
 function loadLocalEvents() {
   try { localEvents = JSON.parse(localStorage.getItem(LOCAL_EVENTS_KEY)) || {}; } catch(e) { localEvents = {}; }
@@ -2083,11 +2167,29 @@ function saveLocalEvents() {
 
 function openLocalEventModal(y, m, d) {
   localEventTarget = { y, m, d };
+  localEventEditId = null;
   const months = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
   document.getElementById('localEventModalTitle').textContent = `${y}년 ${months[m]} ${d}일 일정 추가`;
   document.getElementById('localEventName').value = '';
   document.getElementById('localEventStart').value = '';
   document.getElementById('localEventEnd').value = '';
+  document.querySelector('.local-event-save').textContent = '저장';
+  document.getElementById('localEventOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('localEventName').focus(), 100);
+}
+
+function openEditLocalEventModal(key, id) {
+  const [y, m, d] = key.split('-').map(Number);
+  const ev = (localEvents[key] || []).find(e => e.id === id);
+  if (!ev) return;
+  localEventTarget = { y, m, d };
+  localEventEditId = id;
+  const months = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  document.getElementById('localEventModalTitle').textContent = `${y}년 ${months[m]} ${d}일 일정 수정`;
+  document.getElementById('localEventName').value = ev.name;
+  document.getElementById('localEventStart').value = ev.start || '';
+  document.getElementById('localEventEnd').value = ev.end || '';
+  document.querySelector('.local-event-save').textContent = '수정';
   document.getElementById('localEventOverlay').classList.add('open');
   setTimeout(() => document.getElementById('localEventName').focus(), 100);
 }
@@ -2095,6 +2197,7 @@ function openLocalEventModal(y, m, d) {
 function closeLocalEventModal() {
   document.getElementById('localEventOverlay').classList.remove('open');
   localEventTarget = null;
+  localEventEditId = null;
 }
 
 function handleLocalOverlayClick(e) {
@@ -2109,7 +2212,12 @@ function saveLocalEvent() {
   const { y, m, d } = localEventTarget;
   const key = `${y}-${m}-${d}`;
   if (!localEvents[key]) localEvents[key] = [];
-  localEvents[key].push({ id: uid(), name, start, end });
+  if (localEventEditId) {
+    const idx = localEvents[key].findIndex(e => e.id === localEventEditId);
+    if (idx !== -1) localEvents[key][idx] = { id: localEventEditId, name, start, end };
+  } else {
+    localEvents[key].push({ id: uid(), name, start, end });
+  }
   saveLocalEvents();
   closeLocalEventModal();
   showDayEvents(y, m, d);
@@ -2177,6 +2285,7 @@ function showDayEvents(y, m, d) {
           <div class="cal-event-title">${escHtml(ev.name)}</div>
           <div class="cal-event-time">${timeStr}</div>
         </div>
+        <button class="cal-local-edit" onclick="openEditLocalEventModal('${key}','${ev.id}')">✎</button>
         <button class="cal-local-del" onclick="deleteLocalEvent('${key}','${ev.id}')">✕</button>
       </div>`;
   });
