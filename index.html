@@ -7,8 +7,6 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>할 일 관리</title>
-<script src="https://apis.google.com/js/api.js" async defer onload="gapiLoaded()"></script>
-<script src="https://accounts.google.com/gsi/client" async defer onload="gisLoaded()"></script>
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
@@ -279,25 +277,6 @@
     border-color: var(--accent);
     color: var(--accent);
   }
-
-  .cal-auth-btn {
-    font-size: 11px;
-    color: #fff;
-    background: #4285f4;
-    border: none;
-    border-radius: 4px;
-    padding: 3px 9px;
-    cursor: pointer;
-    font-family: inherit;
-    font-weight: 500;
-    transition: all var(--transition);
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-  .cal-auth-btn:hover { background: #3367d6; }
-  .cal-auth-btn:disabled { background: #ccc; cursor: default; }
-  .cal-auth-btn.synced { background: #34a853; }
 
   .event-dot-row {
     display: flex;
@@ -609,17 +588,6 @@
     .cal-nav-btn { width: 34px; height: 34px; font-size: 18px; }
     .cal-grid { padding: 10px 10px 14px; }
 
-    /* 구글 연동 버튼 모바일에서 크게 */
-    .cal-auth-btn {
-      font-size: 12px; padding: 6px 12px;
-    }
-    .cal-auth-btn:not(.synced) {
-      animation: pulse 2s infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(66,133,244,0.4); }
-      50%       { box-shadow: 0 0 0 6px rgba(66,133,244,0); }
-    }
     .cal-today-btn { font-size: 12px; padding: 5px 10px; }
 
     /* 할일 */
@@ -1245,7 +1213,6 @@
       <div class="cal-header">
         <span class="cal-month-label" id="calMonthLabel"></span>
         <div style="display:flex;align-items:center;gap:8px">
-          <button class="cal-auth-btn" id="calAuthBtn" onclick="handleAuthClick()" disabled>구글 연동</button>
           <button class="cal-today-btn" onclick="calGoToday()">오늘</button>
           <div class="cal-nav">
             <button class="cal-nav-btn" onclick="calMove(-1)">&#8249;</button>
@@ -1870,146 +1837,6 @@ function updateDate() {
 updateDate();
 render();
 
-// ── Google Calendar ────────────────────────────────────────────────────────
-
-const CLIENT_ID = '244186845410-189k09ovq59qmm8obgie5r2j96a2vu9f.apps.googleusercontent.com';
-const SCOPES    = 'https://www.googleapis.com/auth/calendar.events';
-
-let gapiInited = false;
-let gisInited  = false;
-let tokenClient;
-let calEvents  = {};
-
-function gapiLoaded() {
-  gapi.load('client', async () => {
-    await gapi.client.init({
-      discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
-    });
-    gapiInited = true;
-    maybeEnable();
-  });
-}
-
-function gisLoaded() {
-  tokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: CLIENT_ID,
-    scope: SCOPES,
-    callback: '',
-  });
-  gisInited = true;
-  maybeEnable();
-}
-
-let silentAuthDone = false;
-const GCAL_HINT_KEY  = 'gcal_login_hint';
-const GCAL_SCOPE_KEY = 'gcal_granted_scope';
-
-function getSavedHint() {
-  return localStorage.getItem(GCAL_HINT_KEY) || 'bongsu95@gmail.com';
-}
-
-function needsReauth() {
-  const granted = localStorage.getItem(GCAL_SCOPE_KEY) || '';
-  return !granted.includes('calendar.events');
-}
-
-async function saveLoginHint(accessToken) {
-  try {
-    const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-    const info = await res.json();
-    if (info.email) localStorage.setItem(GCAL_HINT_KEY, info.email);
-  } catch(e) {}
-}
-
-function setAuthBtnSynced() {
-  const btn = document.getElementById('calAuthBtn');
-  btn.textContent = '동기화 ✓';
-  btn.classList.add('synced');
-  btn.disabled = false;
-}
-
-function trySilentAuth(retryCount = 0) {
-  if (needsReauth()) return; // 새 권한 필요 시 사용자가 직접 버튼 눌러야 함
-  tokenClient.callback = async (resp) => {
-    if (resp.error) {
-      if (retryCount < 3) {
-        setTimeout(() => trySilentAuth(retryCount + 1), (retryCount + 1) * 1000);
-      }
-      return;
-    }
-    silentAuthDone = true;
-    gapi.client.setToken({ access_token: resp.access_token });
-    setAuthBtnSynced();
-    await fetchCalEvents();
-  };
-  const hint = getSavedHint();
-  tokenClient.requestAccessToken({ prompt: 'none', ...(hint && { login_hint: hint }) });
-}
-
-function maybeEnable() {
-  if (!gapiInited || !gisInited) return;
-  document.getElementById('calAuthBtn').disabled = false;
-  if (!silentAuthDone) trySilentAuth();
-}
-
-async function handleAuthClick() {
-  tokenClient.callback = async (resp) => {
-    if (resp.error) { console.error(resp); return; }
-    silentAuthDone = true;
-    gapi.client.setToken({ access_token: resp.access_token });
-    localStorage.setItem(GCAL_SCOPE_KEY, SCOPES);
-    await saveLoginHint(resp.access_token);
-    setAuthBtnSynced();
-    await fetchCalEvents();
-  };
-  const hint = getSavedHint();
-  // 권한이 바뀌었으면 consent 강제, 아니면 자동
-  const prompt = needsReauth() ? 'consent' : (hint ? '' : 'select_account');
-  tokenClient.requestAccessToken({ prompt, ...(hint && { login_hint: hint }) });
-}
-
-async function fetchCalEvents() {
-  const start = new Date(calYear, calMonth, 1).toISOString();
-  const end   = new Date(calYear, calMonth + 1, 0, 23, 59, 59).toISOString();
-  try {
-    const res = await gapi.client.calendar.events.list({
-      calendarId: 'primary',
-      timeMin: start,
-      timeMax: end,
-      singleEvents: true,
-      orderBy: 'startTime',
-      maxResults: 100,
-    });
-    calEvents = {};
-    (res.result.items || []).forEach(ev => {
-      const d = new Date(ev.start.dateTime || ev.start.date);
-      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-      if (!calEvents[key]) calEvents[key] = [];
-      calEvents[key].push(ev);
-    });
-    renderCal();
-    renderUpcoming();
-  } catch(e) { console.error(e); }
-}
-
-async function deleteGcalEvent(eventId, itemEl) {
-  try {
-    await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId });
-    // calEvents에서도 제거
-    for (const key of Object.keys(calEvents)) {
-      calEvents[key] = calEvents[key].filter(e => e.id !== eventId);
-      if (calEvents[key].length === 0) delete calEvents[key];
-    }
-    renderCal();
-    renderUpcoming();
-  } catch(e) {
-    alert('삭제 실패: 구글 캘린더 연동 후 다시 시도해주세요.');
-    console.error(e);
-  }
-}
-
 function renderUpcoming() {
   const card = document.getElementById('upcomingCard');
   const list = document.getElementById('upcomingList');
@@ -2019,22 +1846,6 @@ function renderUpcoming() {
   const todayStr = today.toDateString();
 
   const upcoming = [];
-
-  // 구글 캘린더 일정
-  Object.entries(calEvents).forEach(([key, events]) => {
-    events.forEach(ev => {
-      const d = new Date(ev.start.dateTime || ev.start.date);
-      if (d >= today) upcoming.push({
-        date: d,
-        title: ev.summary || '(제목 없음)',
-        timeStr: ev.start.dateTime
-          ? d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
-          : '종일',
-        isGcal: true,
-        gcalId: ev.id
-      });
-    });
-  });
 
   // 로컬 일정
   Object.entries(localEvents).forEach(([key, events]) => {
@@ -2082,7 +1893,7 @@ function renderUpcoming() {
       </div>
       <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">
         ${ev.isLocal ? '<button class="upcoming-edit">✎</button>' : ''}
-        ${(ev.isLocal || ev.isGcal) ? '<button class="upcoming-delete">×</button>' : '<span class="upcoming-dot"></span>'}
+        ${ev.isLocal ? '<button class="upcoming-delete">×</button>' : ''}
       </div>
     `;
     const commentEl = item.querySelector('.upcoming-comment');
@@ -2094,13 +1905,6 @@ function renderUpcoming() {
       item.querySelector('.upcoming-delete').addEventListener('click', () => {
         if (confirm(`"${ev.title}" 일정을 삭제할까요?`)) {
           deleteLocalEvent(ev.localKey, ev.localId);
-        }
-      });
-    }
-    if (ev.isGcal) {
-      item.querySelector('.upcoming-delete').addEventListener('click', () => {
-        if (confirm(`"${ev.title}" 일정을 구글 캘린더에서 삭제할까요?`)) {
-          deleteGcalEvent(ev.gcalId, item);
         }
       });
     }
@@ -2241,7 +2045,6 @@ renderUpcoming();
 
 function showDayEvents(y, m, d) {
   const key = `${y}-${m}-${d}`;
-  const gcalEvs   = calEvents[key] || [];
   const localEvs  = localEvents[key] || [];
   const panel = document.getElementById('calEventPanel');
   const list  = document.getElementById('calEventList');
@@ -2255,27 +2058,12 @@ function showDayEvents(y, m, d) {
       <button class="cal-add-event-btn" onclick="openLocalEventModal(${y},${m},${d})">+ 일정 추가</button>
     </div>`;
 
-  if (gcalEvs.length === 0 && localEvs.length === 0) {
+  if (localEvs.length === 0) {
     list.innerHTML += `<div class="cal-no-event">일정 없음</div>`;
     return;
   }
 
-  // 구글 일정
-  gcalEvs.forEach(ev => {
-    const timeStr = ev.start.dateTime
-      ? new Date(ev.start.dateTime).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
-      : '종일';
-    list.innerHTML += `
-      <div class="cal-event-item">
-        <span class="cal-event-dot" style="background:#4285f4"></span>
-        <div>
-          <div class="cal-event-title">${escHtml(ev.summary || '(제목 없음)')}</div>
-          <div class="cal-event-time">${timeStr}</div>
-        </div>
-      </div>`;
-  });
-
-  // 로컬 일정 (같은 파란색)
+  // 로컬 일정
   localEvs.forEach(ev => {
     const timeStr = ev.start ? `${ev.start}${ev.end ? ' ~ ' + ev.end : ''}` : '종일';
     list.innerHTML += `
@@ -2307,16 +2095,14 @@ function calMove(dir) {
   calMonth += dir;
   if (calMonth > 11) { calMonth = 0; calYear++; }
   if (calMonth < 0)  { calMonth = 11; calYear--; }
-  if (gapi.client && gapi.client.getToken()) fetchCalEvents();
-  else renderCal();
+  renderCal();
 }
 
 function calGoToday() {
   const today = new Date();
   calYear  = today.getFullYear();
   calMonth = today.getMonth();
-  if (gapi.client && gapi.client.getToken()) fetchCalEvents();
-  else renderCal();
+  renderCal();
 }
 
 function renderCal() {
@@ -2364,7 +2150,7 @@ function renderCal() {
 
       // 이벤트 점 (구글 + 로컬 합산)
       const key = `${calYear}-${calMonth}-${num}`;
-      const totalEvs = (calEvents[key] || []).length + (localEvents[key] || []).length;
+      const totalEvs = (localEvents[key] || []).length;
       if (totalEvs > 0) {
         const dotRow = document.createElement('div');
         dotRow.className = 'event-dot-row';
