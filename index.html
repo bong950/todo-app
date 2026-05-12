@@ -437,18 +437,17 @@
     margin-top: 5px;
   }
   .upcoming-delete {
-    display: none;
+    display: block;
     background: none;
     border: none;
     color: #ccc;
-    font-size: 16px;
+    font-size: 18px;
     cursor: pointer;
     padding: 0 0 0 6px;
     line-height: 1;
     flex-shrink: 0;
   }
-  .upcoming-delete:hover { color: #e55; }
-  .upcoming-item:hover .upcoming-delete { display: block; }
+  .upcoming-delete:hover, .upcoming-delete:active { color: #e55; }
   .upcoming-empty {
     padding: 16px;
     font-size: 12.5px;
