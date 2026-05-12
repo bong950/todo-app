@@ -72,9 +72,24 @@
 
   /* ── Page ── */
   .page {
-    max-width: 720px;
+    max-width: 1200px;
     margin: 0 auto;
     padding: 40px 24px 24px;
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .todo-col {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .calendar-col {
+    width: 320px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 72px;
   }
 
   .page-title {
@@ -84,6 +99,135 @@
     letter-spacing: -0.03em;
     margin-bottom: 28px;
     line-height: 1.2;
+  }
+
+  /* ── Calendar ── */
+  .calendar-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+
+  .cal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 18px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .cal-month-label {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+  }
+
+  .cal-nav {
+    display: flex;
+    gap: 4px;
+  }
+
+  .cal-nav-btn {
+    background: transparent;
+    border: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition);
+    font-size: 14px;
+  }
+  .cal-nav-btn:hover {
+    background: var(--bg);
+    color: var(--text-primary);
+  }
+
+  .cal-grid {
+    padding: 12px 14px 16px;
+  }
+
+  .cal-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    margin-bottom: 6px;
+  }
+
+  .cal-weekday {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    padding: 4px 0;
+  }
+  .cal-weekday:first-child { color: #e03e3e; }
+  .cal-weekday:last-child  { color: var(--accent); }
+
+  .cal-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+  }
+
+  .cal-day {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-primary);
+    transition: background var(--transition);
+    position: relative;
+  }
+  .cal-day:hover { background: var(--bg); }
+  .cal-day.empty { cursor: default; }
+  .cal-day.empty:hover { background: transparent; }
+  .cal-day.sunday { color: #e03e3e; }
+  .cal-day.saturday { color: var(--accent); }
+  .cal-day.other-month { color: #ccc8c3; }
+  .cal-day.today {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+  }
+  .cal-day.today:hover { background: var(--accent-hover); }
+  .cal-day.selected {
+    background: var(--accent-light);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .cal-day.today.selected {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  .cal-today-btn {
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all var(--transition);
+  }
+  .cal-today-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  @media (max-width: 800px) {
+    .page { flex-direction: column; }
+    .calendar-col { width: 100%; position: static; }
   }
 
   /* ── Add Section ── */
@@ -466,11 +610,39 @@
 </header>
 
 <div class="page">
-  <h1 class="page-title">나의 할 일</h1>
-  <div id="sectionList"></div>
-  <button class="add-section-btn" onclick="addSection()">
-    <span style="font-size:15px;line-height:1">+</span> 새 섹션 추가
-  </button>
+  <div class="todo-col">
+    <h1 class="page-title">나의 할 일</h1>
+    <div id="sectionList"></div>
+    <button class="add-section-btn" onclick="addSection()">
+      <span style="font-size:15px;line-height:1">+</span> 새 섹션 추가
+    </button>
+  </div>
+  <div class="calendar-col">
+    <div class="calendar-card">
+      <div class="cal-header">
+        <span class="cal-month-label" id="calMonthLabel"></span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button class="cal-today-btn" onclick="calGoToday()">오늘</button>
+          <div class="cal-nav">
+            <button class="cal-nav-btn" onclick="calMove(-1)">&#8249;</button>
+            <button class="cal-nav-btn" onclick="calMove(1)">&#8250;</button>
+          </div>
+        </div>
+      </div>
+      <div class="cal-grid">
+        <div class="cal-weekdays">
+          <div class="cal-weekday">일</div>
+          <div class="cal-weekday">월</div>
+          <div class="cal-weekday">화</div>
+          <div class="cal-weekday">수</div>
+          <div class="cal-weekday">목</div>
+          <div class="cal-weekday">금</div>
+          <div class="cal-weekday">토</div>
+        </div>
+        <div class="cal-days" id="calDays"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -757,6 +929,101 @@ function updateDate() {
 
 updateDate();
 render();
+
+// ── Calendar ───────────────────────────────────────────────────────────────
+
+let calYear, calMonth, calSelected;
+
+function calInit() {
+  const today = new Date();
+  calYear  = today.getFullYear();
+  calMonth = today.getMonth();
+  calSelected = null;
+  renderCal();
+}
+
+function calMove(dir) {
+  calMonth += dir;
+  if (calMonth > 11) { calMonth = 0; calYear++; }
+  if (calMonth < 0)  { calMonth = 11; calYear--; }
+  renderCal();
+}
+
+function calGoToday() {
+  const today = new Date();
+  calYear  = today.getFullYear();
+  calMonth = today.getMonth();
+  renderCal();
+}
+
+function renderCal() {
+  const today = new Date();
+  const months = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  document.getElementById('calMonthLabel').textContent = `${calYear}년 ${months[calMonth]}`;
+
+  const firstDay  = new Date(calYear, calMonth, 1).getDay();
+  const lastDate  = new Date(calYear, calMonth + 1, 0).getDate();
+  const prevLast  = new Date(calYear, calMonth, 0).getDate();
+
+  const grid = document.getElementById('calDays');
+  grid.innerHTML = '';
+
+  let dayCount = 0;
+  const totalCells = Math.ceil((firstDay + lastDate) / 7) * 7;
+
+  for (let i = 0; i < totalCells; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'cal-day';
+
+    let num, isOther = false;
+    if (i < firstDay) {
+      num = prevLast - firstDay + i + 1;
+      isOther = true;
+      cell.classList.add('other-month');
+    } else if (i >= firstDay + lastDate) {
+      num = i - firstDay - lastDate + 1;
+      isOther = true;
+      cell.classList.add('other-month');
+    } else {
+      num = i - firstDay + 1;
+    }
+
+    cell.textContent = num;
+
+    const col = i % 7;
+    if (!isOther) {
+      if (col === 0) cell.classList.add('sunday');
+      if (col === 6) cell.classList.add('saturday');
+    }
+
+    if (!isOther &&
+        num === today.getDate() &&
+        calMonth === today.getMonth() &&
+        calYear  === today.getFullYear()) {
+      cell.classList.add('today');
+    }
+
+    if (!isOther && calSelected &&
+        num === calSelected.d &&
+        calMonth === calSelected.m &&
+        calYear  === calSelected.y) {
+      cell.classList.add('selected');
+    }
+
+    if (!isOther) {
+      cell.addEventListener('click', () => {
+        calSelected = { y: calYear, m: calMonth, d: num };
+        renderCal();
+      });
+    } else {
+      cell.classList.add('empty');
+    }
+
+    grid.appendChild(cell);
+  }
+}
+
+calInit();
 </script>
 </body>
 </html>
