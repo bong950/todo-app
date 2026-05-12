@@ -1641,29 +1641,33 @@ function buildItem(item, sec) {
   row.querySelector('input[type=checkbox]').addEventListener('change', e => {
     pushHistory();
     item.done = e.target.checked;
-    row.classList.toggle('done', item.done);
-    row.classList.add(item.done ? 'animate-exit-down' : 'animate-exit-up');
-    setTimeout(() => {
-      if (item.done) {
-        // 완료 섹션으로 이동
-        const doneSec = data.sections.find(s => s._system) || data.sections.find(s => s.name === '완료');
-        if (doneSec && sec.id !== doneSec.id) {
-          sec.items = sec.items.filter(i => i.id !== item.id);
-          item.originSecId = sec.id;
-          doneSec.items.unshift(item);
-        }
-      } else if (sec._system) {
-        // 원래 섹션으로 복귀
+
+    // onSnapshot이 340ms 사이에 끼어들 수 있으므로 즉시 이동 후 saveData로 localTime 확보
+    const doneSec = data.sections.find(s => s._system) || data.sections.find(s => s.name === '완료');
+    if (item.done) {
+      const curSec = data.sections.find(s => s.id === sec.id) || sec;
+      if (doneSec && curSec.id !== doneSec.id) {
+        curSec.items = curSec.items.filter(i => i.id !== item.id);
+        if (!item.originSecId) item.originSecId = curSec.id;
+        if (!doneSec.items.find(i => i.id === item.id)) doneSec.items.unshift(item);
+      }
+    } else {
+      const curSec = data.sections.find(s => s.id === sec.id) || sec;
+      if (curSec._system) {
         const origin = data.sections.find(s => s.id === item.originSecId && !s._system)
                     || data.sections.find(s => !s._system);
         if (origin) {
-          sec.items = sec.items.filter(i => i.id !== item.id);
+          curSec.items = curSec.items.filter(i => i.id !== item.id);
           delete item.originSecId;
           origin.items.push(item);
         }
       }
-      render();
-    }, 340);
+    }
+    saveData(); // localTime 즉시 갱신 → 이후 onSnapshot 덮어쓰기 차단
+
+    row.classList.toggle('done', item.done);
+    row.classList.add(item.done ? 'animate-exit-down' : 'animate-exit-up');
+    setTimeout(() => render(), 340);
   });
 
   // Editable text
