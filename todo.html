@@ -1352,21 +1352,22 @@ function defaultData() {
   };
 }
 
+function migrateSections(sections) {
+  const names = sections.map(s => s.name);
+  if (!names.includes('단기')) sections.push({ id: uid(), name: '단기', open: true, items: [] });
+  if (!names.includes('장기')) sections.push({ id: uid(), name: '장기', open: true, items: [] });
+  if (!sections.find(s => s._system)) {
+    sections.push({ id: uid(), name: '완료', open: true, _system: true, items: [] });
+  }
+  return sections;
+}
+
 function loadData() {
   try {
     const s = localStorage.getItem(STORAGE_KEY);
     if (s) {
       const parsed = JSON.parse(s);
-      const names = parsed.sections.map(sec => sec.name);
-      if (!names.includes('단기')) {
-        parsed.sections.push({ id: uid(), name: '단기', open: true, items: [] });
-      }
-      if (!names.includes('장기')) {
-        parsed.sections.push({ id: uid(), name: '장기', open: true, items: [] });
-      }
-      if (!parsed.sections.find(s => s._system)) {
-        parsed.sections.push({ id: uid(), name: '완료', open: true, _system: true, items: [] });
-      }
+      migrateSections(parsed.sections);
       return parsed;
     }
   } catch(e) {}
@@ -2260,6 +2261,7 @@ function setupFirebaseSync() {
     if (remoteTime >= localTime) {
       cancelPendingSaves(); // 예약된 로컬→Firestore 덮어쓰기 타이머 전부 취소
       _applyingRemote = true;
+      migrateSections(remote.sections);
       data = { sections: remote.sections };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       localStorage.setItem(STORAGE_KEY + '_ts', remoteTime);
