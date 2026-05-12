@@ -1796,7 +1796,7 @@ render();
 // ── Google Calendar ────────────────────────────────────────────────────────
 
 const CLIENT_ID = '244186845410-189k09ovq59qmm8obgie5r2j96a2vu9f.apps.googleusercontent.com';
-const SCOPES    = 'https://www.googleapis.com/auth/calendar.readonly';
+const SCOPES    = 'https://www.googleapis.com/auth/calendar.events';
 
 let gapiInited = false;
 let gisInited  = false;
@@ -1907,6 +1907,22 @@ async function fetchCalEvents() {
   } catch(e) { console.error(e); }
 }
 
+async function deleteGcalEvent(eventId, itemEl) {
+  try {
+    await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId });
+    // calEvents에서도 제거
+    for (const key of Object.keys(calEvents)) {
+      calEvents[key] = calEvents[key].filter(e => e.id !== eventId);
+      if (calEvents[key].length === 0) delete calEvents[key];
+    }
+    renderCal();
+    renderUpcoming();
+  } catch(e) {
+    alert('삭제 실패: 구글 캘린더 연동 후 다시 시도해주세요.');
+    console.error(e);
+  }
+}
+
 function renderUpcoming() {
   const card = document.getElementById('upcomingCard');
   const list = document.getElementById('upcomingList');
@@ -1926,7 +1942,9 @@ function renderUpcoming() {
         title: ev.summary || '(제목 없음)',
         timeStr: ev.start.dateTime
           ? d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
-          : '종일'
+          : '종일',
+        isGcal: true,
+        gcalId: ev.id
       });
     });
   });
@@ -1975,7 +1993,7 @@ function renderUpcoming() {
         <div class="upcoming-time">${isToday ? '오늘 · ' : ''}${ev.timeStr}</div>
         <div class="upcoming-comment ${commentText ? '' : 'empty'}">${escHtml(commentText) || '메모 추가...'}</div>
       </div>
-      ${ev.isLocal ? '<button class="upcoming-delete">×</button>' : '<span class="upcoming-dot"></span>'}
+      ${(ev.isLocal || ev.isGcal) ? '<button class="upcoming-delete">×</button>' : '<span class="upcoming-dot"></span>'}
     `;
     const commentEl = item.querySelector('.upcoming-comment');
     attachCommentEdit(commentEl, commentKey);
@@ -1983,6 +2001,13 @@ function renderUpcoming() {
       item.querySelector('.upcoming-delete').addEventListener('click', () => {
         if (confirm(`"${ev.title}" 일정을 삭제할까요?`)) {
           deleteLocalEvent(ev.localKey, ev.localId);
+        }
+      });
+    }
+    if (ev.isGcal) {
+      item.querySelector('.upcoming-delete').addEventListener('click', () => {
+        if (confirm(`"${ev.title}" 일정을 구글 캘린더에서 삭제할까요?`)) {
+          deleteGcalEvent(ev.gcalId, item);
         }
       });
     }
