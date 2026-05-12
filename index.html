@@ -568,6 +568,19 @@
     position: relative;
     transition: background var(--transition);
     animation: fadeIn 0.22s ease;
+    cursor: grab;
+  }
+  .todo-item.dragging {
+    opacity: 0.4;
+    cursor: grabbing;
+  }
+  .todo-item.drag-over {
+    border-top: 2px solid var(--accent);
+  }
+  .items-list.drag-target {
+    background: var(--accent-light);
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    min-height: 40px;
   }
   .todo-item:hover {
     background: var(--bg);
@@ -1173,6 +1186,26 @@ function buildSection(sec) {
   const ul = document.createElement('div');
   ul.className = 'items-list';
 
+  // 빈 섹션에 드롭 가능하도록
+  ul.addEventListener('dragover', e => {
+    e.preventDefault();
+    ul.classList.add('drag-target');
+  });
+  ul.addEventListener('dragleave', e => {
+    if (!ul.contains(e.relatedTarget)) ul.classList.remove('drag-target');
+  });
+  ul.addEventListener('drop', e => {
+    e.preventDefault();
+    ul.classList.remove('drag-target');
+    if (!dragItem) return;
+    if (dragFromSec.id !== sec.id) {
+      dragFromSec.items = dragFromSec.items.filter(i => i.id !== dragItem.id);
+      sec.items.push(dragItem);
+      dragItem = null; dragFromSec = null;
+      render();
+    }
+  });
+
   pending.forEach(item => ul.appendChild(buildItem(item, sec)));
 
   if (pending.length > 0 && done.length > 0) {
@@ -1211,10 +1244,49 @@ function buildSection(sec) {
   return wrap;
 }
 
+let dragItem = null;
+let dragFromSec = null;
+
 function buildItem(item, sec) {
   const row = document.createElement('div');
   row.className = 'todo-item' + (item.done ? ' done' : '') + (item.sub ? ' sub' : '');
   row.dataset.id = item.id;
+  row.draggable = true;
+
+  row.addEventListener('dragstart', e => {
+    dragItem = item;
+    dragFromSec = sec;
+    setTimeout(() => row.classList.add('dragging'), 0);
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  row.addEventListener('dragend', () => {
+    row.classList.remove('dragging');
+    document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+    document.querySelectorAll('.drag-target').forEach(el => el.classList.remove('drag-target'));
+  });
+  row.addEventListener('dragover', e => {
+    e.preventDefault();
+    document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+    if (dragItem && item.id !== dragItem.id) row.classList.add('drag-over');
+  });
+  row.addEventListener('drop', e => {
+    e.preventDefault();
+    if (!dragItem || item.id === dragItem.id) return;
+    // 같은 섹션 내 순서 변경
+    if (dragFromSec.id === sec.id) {
+      const fromIdx = sec.items.findIndex(i => i.id === dragItem.id);
+      const toIdx   = sec.items.findIndex(i => i.id === item.id);
+      sec.items.splice(fromIdx, 1);
+      sec.items.splice(toIdx, 0, dragItem);
+    } else {
+      // 다른 섹션으로 이동
+      dragFromSec.items = dragFromSec.items.filter(i => i.id !== dragItem.id);
+      const toIdx = sec.items.findIndex(i => i.id === item.id);
+      sec.items.splice(toIdx, 0, dragItem);
+    }
+    dragItem = null; dragFromSec = null;
+    render();
+  });
 
   row.innerHTML = `
     <label class="check-wrap">
