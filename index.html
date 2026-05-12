@@ -231,16 +231,28 @@
     from { opacity: 0; transform: translateY(-4px); }
     to   { opacity: 1; transform: translateY(0); }
   }
-  @keyframes slideDown {
-    from { opacity: 0.7; transform: translateY(-6px); }
-    to   { opacity: 1;   transform: translateY(0); }
+  @keyframes exitDown {
+    0%   { opacity: 1;   transform: translateY(0);   max-height: 60px; }
+    60%  { opacity: 0;   transform: translateY(8px);  max-height: 60px; }
+    100% { opacity: 0;   transform: translateY(8px);  max-height: 0; margin: 0; padding-top: 0; padding-bottom: 0; }
   }
-  @keyframes slideUp {
-    from { opacity: 0.7; transform: translateY(6px); }
-    to   { opacity: 1;   transform: translateY(0); }
+  @keyframes exitUp {
+    0%   { opacity: 1;   transform: translateY(0);   max-height: 60px; }
+    60%  { opacity: 0;   transform: translateY(-8px); max-height: 60px; }
+    100% { opacity: 0;   transform: translateY(-8px); max-height: 0; margin: 0; padding-top: 0; padding-bottom: 0; }
   }
-  .todo-item.animate-down { animation: slideDown 0.25s ease; }
-  .todo-item.animate-up   { animation: slideUp 0.25s ease; }
+  @keyframes enterDown {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes enterUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .todo-item.animate-exit-down { animation: exitDown 0.32s cubic-bezier(0.4,0,0.2,1) forwards; pointer-events: none; }
+  .todo-item.animate-exit-up   { animation: exitUp   0.32s cubic-bezier(0.4,0,0.2,1) forwards; pointer-events: none; }
+  .todo-item.animate-enter-down { animation: enterDown 0.28s cubic-bezier(0.0,0.0,0.2,1); }
+  .todo-item.animate-enter-up   { animation: enterUp   0.28s cubic-bezier(0.0,0.0,0.2,1); }
 
   /* Checkbox */
   .check-wrap {
@@ -665,8 +677,8 @@ function buildItem(item, sec) {
     item.done = e.target.checked;
     row.classList.toggle('done', item.done);
     // animate then re-render
-    row.classList.add(item.done ? 'animate-down' : 'animate-up');
-    setTimeout(() => render(), 280);
+    row.classList.add(item.done ? 'animate-exit-down' : 'animate-exit-up');
+    setTimeout(() => render(), 340);
   });
 
   // Editable text
