@@ -905,6 +905,11 @@
     gap: 8px;
     padding: 4px 16px;
     margin: 2px 0;
+    cursor: pointer;
+    user-select: none;
+  }
+  .done-divider:hover .done-divider-label {
+    color: var(--text-primary);
   }
   .done-divider-line {
     flex: 1;
@@ -916,6 +921,20 @@
     color: var(--text-secondary);
     white-space: nowrap;
     font-weight: 400;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: color var(--transition);
+  }
+  .done-toggle-arrow {
+    display: inline-block;
+    font-size: 9px;
+    transition: transform 0.2s ease;
+    transform: rotate(0deg);
+    color: var(--text-secondary);
+  }
+  .done-toggle-arrow.open {
+    transform: rotate(90deg);
   }
 
   /* ── Progress bar ── */
@@ -1444,14 +1463,30 @@ function buildSection(sec) {
 
   pending.forEach(item => ul.appendChild(buildItem(item, sec)));
 
-  if (pending.length > 0 && done.length > 0) {
+  if (done.length > 0) {
+    if (sec.doneOpen === undefined) sec.doneOpen = true;
+
     const div = document.createElement('div');
     div.className = 'done-divider';
-    div.innerHTML = `<div class="done-divider-line"></div><span class="done-divider-label">완료 ${done.length}개</span><div class="done-divider-line"></div>`;
+    div.innerHTML = `
+      <div class="done-divider-line"></div>
+      <span class="done-divider-label">
+        <span class="done-toggle-arrow ${sec.doneOpen ? 'open' : ''}">▶</span>
+        완료 ${done.length}개
+      </span>
+      <div class="done-divider-line"></div>
+    `;
+    div.addEventListener('click', () => {
+      sec.doneOpen = !sec.doneOpen;
+      saveData();
+      render();
+    });
     ul.appendChild(div);
-  }
 
-  done.forEach(item => ul.appendChild(buildItem(item, sec)));
+    if (sec.doneOpen) {
+      done.forEach(item => ul.appendChild(buildItem(item, sec)));
+    }
+  }
 
   // Add row
   const addRow = document.createElement('div');
