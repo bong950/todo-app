@@ -1905,7 +1905,7 @@ const GCAL_HINT_KEY  = 'gcal_login_hint';
 const GCAL_SCOPE_KEY = 'gcal_granted_scope';
 
 function getSavedHint() {
-  return localStorage.getItem(GCAL_HINT_KEY) || '';
+  return localStorage.getItem(GCAL_HINT_KEY) || 'bongsu95@gmail.com';
 }
 
 function needsReauth() {
