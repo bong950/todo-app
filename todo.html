@@ -1366,6 +1366,7 @@ function loadData() {
 function saveData(addHistory = false) {
   if (addHistory) pushHistory();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  localStorage.setItem(STORAGE_KEY + '_ts', Date.now());
   fbSave(todosRef, { sections: data.sections });
 }
 
@@ -1850,6 +1851,7 @@ function loadLocalEvents() {
 }
 function saveLocalEvents() {
   localStorage.setItem(LOCAL_EVENTS_KEY, JSON.stringify(localEvents));
+  localStorage.setItem(LOCAL_EVENTS_KEY + '_ts', Date.now());
   fbSave(eventsRef, { events: localEvents });
 }
 
@@ -2084,6 +2086,7 @@ function loadMemos() {
 }
 function saveMemos() {
   localStorage.setItem(MEMO_LIST_KEY, JSON.stringify(memos));
+  localStorage.setItem(MEMO_LIST_KEY + '_ts', Date.now());
   fbSave(memosRef, { list: memos });
 }
 
