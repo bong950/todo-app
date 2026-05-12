@@ -280,8 +280,69 @@
   }
   .cal-event-title { color: var(--text-primary); font-weight: 400; line-height: 1.4; }
   .cal-event-time  { color: var(--text-secondary); font-size: 11px; }
-  .cal-panel-date  { font-size: 12px; font-weight: 500; color: var(--text-secondary); padding: 8px 0 4px; }
+  .cal-panel-date  {
+    font-size: 12px; font-weight: 500; color: var(--text-secondary);
+    padding: 8px 0 4px; display: flex; align-items: center; justify-content: space-between;
+  }
   .cal-no-event    { font-size: 12px; color: var(--text-secondary); padding: 8px 0; }
+  .cal-add-event-btn {
+    font-size: 11px; color: var(--accent);
+    background: var(--accent-light); border: none;
+    border-radius: 4px; padding: 2px 8px;
+    cursor: pointer; font-family: inherit;
+    transition: all var(--transition);
+  }
+  .cal-add-event-btn:hover { background: var(--accent); color: #fff; }
+  .cal-local-del {
+    margin-left: auto; background: transparent; border: none;
+    color: var(--text-secondary); cursor: pointer; font-size: 11px;
+    padding: 1px 4px; border-radius: 3px; opacity: 0; transition: all var(--transition);
+  }
+  .cal-event-item:hover .cal-local-del { opacity: 1; }
+  .cal-local-del:hover { background: #fff0f0; color: var(--danger); }
+
+  /* 일정 추가 모달 */
+  .local-event-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.3);
+    z-index: 300; display: none;
+    align-items: center; justify-content: center;
+    padding: 20px; backdrop-filter: blur(2px);
+  }
+  .local-event-overlay.open { display: flex; }
+  .local-event-modal {
+    background: var(--surface); border-radius: 12px;
+    box-shadow: var(--shadow-md); width: 100%; max-width: 360px;
+    overflow: hidden; animation: memoIn 0.2s ease;
+  }
+  .local-event-modal-header {
+    padding: 16px 18px 12px; border-bottom: 1px solid var(--border);
+    font-size: 14px; font-weight: 600; color: var(--text-primary);
+  }
+  .local-event-modal-body { padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; }
+  .local-event-input {
+    width: 100%; border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 12px; font-size: 14px; font-family: inherit;
+    outline: none; color: var(--text-primary); transition: border-color var(--transition);
+  }
+  .local-event-input:focus { border-color: var(--accent); }
+  .local-event-time-row { display: flex; gap: 8px; }
+  .local-event-time-row .local-event-input { flex: 1; }
+  .local-event-modal-footer {
+    padding: 10px 18px 16px; display: flex; gap: 8px; justify-content: flex-end;
+  }
+  .local-event-cancel {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 7px 16px; font-size: 13px; font-family: inherit; cursor: pointer;
+    color: var(--text-secondary); transition: all var(--transition);
+  }
+  .local-event-cancel:hover { color: var(--text-primary); }
+  .local-event-save {
+    background: var(--accent); border: none; border-radius: 6px;
+    padding: 7px 16px; font-size: 13px; font-family: inherit;
+    cursor: pointer; color: #fff; transition: background var(--transition);
+  }
+  .local-event-save:hover { background: var(--accent-hover); }
 
   /* ── Upcoming ── */
   .upcoming-card {
@@ -1038,6 +1099,24 @@
   </div>
 </div>
 
+<!-- Local Event Modal -->
+<div class="local-event-overlay" id="localEventOverlay" onclick="handleLocalOverlayClick(event)">
+  <div class="local-event-modal">
+    <div class="local-event-modal-header" id="localEventModalTitle">일정 추가</div>
+    <div class="local-event-modal-body">
+      <input class="local-event-input" id="localEventName" type="text" placeholder="일정 제목" />
+      <div class="local-event-time-row">
+        <input class="local-event-input" id="localEventStart" type="time" />
+        <input class="local-event-input" id="localEventEnd" type="time" />
+      </div>
+    </div>
+    <div class="local-event-modal-footer">
+      <button class="local-event-cancel" onclick="closeLocalEventModal()">취소</button>
+      <button class="local-event-save" onclick="saveLocalEvent()">저장</button>
+    </div>
+  </div>
+</div>
+
 <!-- Memo Editor Overlay -->
 <div class="memo-overlay" id="memoOverlay" onclick="handleOverlayClick(event)">
   <div class="memo-editor" id="memoEditor">
@@ -1604,36 +1683,111 @@ function renderUpcoming() {
   });
 }
 
+// ── Local Events ───────────────────────────────────────────────────────────
+const LOCAL_EVENTS_KEY = 'local_cal_events';
+let localEvents = {};
+let localEventTarget = null; // { y, m, d }
+
+function loadLocalEvents() {
+  try { localEvents = JSON.parse(localStorage.getItem(LOCAL_EVENTS_KEY)) || {}; } catch(e) { localEvents = {}; }
+}
+function saveLocalEvents() {
+  localStorage.setItem(LOCAL_EVENTS_KEY, JSON.stringify(localEvents));
+}
+
+function openLocalEventModal(y, m, d) {
+  localEventTarget = { y, m, d };
+  const months = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  document.getElementById('localEventModalTitle').textContent = `${y}년 ${months[m]} ${d}일 일정 추가`;
+  document.getElementById('localEventName').value = '';
+  document.getElementById('localEventStart').value = '';
+  document.getElementById('localEventEnd').value = '';
+  document.getElementById('localEventOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('localEventName').focus(), 100);
+}
+
+function closeLocalEventModal() {
+  document.getElementById('localEventOverlay').classList.remove('open');
+  localEventTarget = null;
+}
+
+function handleLocalOverlayClick(e) {
+  if (e.target === document.getElementById('localEventOverlay')) closeLocalEventModal();
+}
+
+function saveLocalEvent() {
+  const name = document.getElementById('localEventName').value.trim();
+  if (!name) { document.getElementById('localEventName').focus(); return; }
+  const start = document.getElementById('localEventStart').value;
+  const end   = document.getElementById('localEventEnd').value;
+  const { y, m, d } = localEventTarget;
+  const key = `${y}-${m}-${d}`;
+  if (!localEvents[key]) localEvents[key] = [];
+  localEvents[key].push({ id: uid(), name, start, end });
+  saveLocalEvents();
+  closeLocalEventModal();
+  showDayEvents(y, m, d);
+  renderCal();
+}
+
+function deleteLocalEvent(key, id) {
+  localEvents[key] = (localEvents[key] || []).filter(e => e.id !== id);
+  if (localEvents[key].length === 0) delete localEvents[key];
+  saveLocalEvents();
+  const { y, m, d } = calSelected || {};
+  if (y !== undefined) showDayEvents(y, m, d);
+  renderCal();
+}
+
+loadLocalEvents();
+
 function showDayEvents(y, m, d) {
   const key = `${y}-${m}-${d}`;
-  const events = calEvents[key] || [];
+  const gcalEvs   = calEvents[key] || [];
+  const localEvs  = localEvents[key] || [];
   const panel = document.getElementById('calEventPanel');
   const list  = document.getElementById('calEventList');
-
-  if (events.length === 0 && Object.keys(calEvents).length === 0) {
-    panel.style.display = 'none';
-    return;
-  }
+  const months = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
 
   panel.style.display = 'block';
-  const dateStr = `${y}년 ${m+1}월 ${d}일`;
-  list.innerHTML = `<div class="cal-panel-date">${dateStr}</div>`;
+  const dateStr = `${y}년 ${months[m]} ${d}일`;
+  list.innerHTML = `
+    <div class="cal-panel-date">
+      <span>${dateStr}</span>
+      <button class="cal-add-event-btn" onclick="openLocalEventModal(${y},${m},${d})">+ 일정 추가</button>
+    </div>`;
 
-  if (events.length === 0) {
+  if (gcalEvs.length === 0 && localEvs.length === 0) {
     list.innerHTML += `<div class="cal-no-event">일정 없음</div>`;
     return;
   }
-  events.forEach(ev => {
+
+  // 구글 일정
+  gcalEvs.forEach(ev => {
     const timeStr = ev.start.dateTime
       ? new Date(ev.start.dateTime).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
       : '종일';
     list.innerHTML += `
       <div class="cal-event-item">
-        <span class="cal-event-dot" style="background:${ev.colorId ? '#'+ev.colorId : '#4285f4'}"></span>
+        <span class="cal-event-dot" style="background:#4285f4"></span>
         <div>
           <div class="cal-event-title">${escHtml(ev.summary || '(제목 없음)')}</div>
           <div class="cal-event-time">${timeStr}</div>
         </div>
+      </div>`;
+  });
+
+  // 로컬 일정 (같은 파란색)
+  localEvs.forEach(ev => {
+    const timeStr = ev.start ? `${ev.start}${ev.end ? ' ~ ' + ev.end : ''}` : '종일';
+    list.innerHTML += `
+      <div class="cal-event-item">
+        <span class="cal-event-dot" style="background:#4285f4"></span>
+        <div style="flex:1">
+          <div class="cal-event-title">${escHtml(ev.name)}</div>
+          <div class="cal-event-time">${timeStr}</div>
+        </div>
+        <button class="cal-local-del" onclick="deleteLocalEvent('${key}','${ev.id}')">✕</button>
       </div>`;
   });
 }
@@ -1709,12 +1863,13 @@ function renderCal() {
       if (calSelected && num === calSelected.d && calMonth === calSelected.m && calYear === calSelected.y)
         cell.classList.add('selected');
 
-      // 이벤트 점
+      // 이벤트 점 (구글 + 로컬 합산)
       const key = `${calYear}-${calMonth}-${num}`;
-      if (calEvents[key] && calEvents[key].length > 0) {
+      const totalEvs = (calEvents[key] || []).length + (localEvents[key] || []).length;
+      if (totalEvs > 0) {
         const dotRow = document.createElement('div');
         dotRow.className = 'event-dot-row';
-        const count = Math.min(calEvents[key].length, 3);
+        const count = Math.min(totalEvs, 3);
         for (let d = 0; d < count; d++) {
           const dot = document.createElement('span');
           dot.className = 'event-dot';
