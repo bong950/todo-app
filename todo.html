@@ -1227,13 +1227,17 @@ function fbSave(ref, payload) {
   const key = ref.path;
   clearTimeout(_fbTimers[key]);
   _fbTimers[key] = setTimeout(() => {
+    if (_applyingRemote) return; // 원격 데이터 적용 중이면 타이머 실행 취소
     const ts = Date.now();
     ref.set({ ...payload, updatedAt: ts }).catch(console.error);
-    // 로컬에도 타임스탬프 저장 (기기 간 최신 여부 비교용)
     if (ref === todosRef)  localStorage.setItem(STORAGE_KEY + '_ts', ts);
     if (ref === memosRef)  localStorage.setItem(MEMO_LIST_KEY + '_ts', ts);
     if (ref === eventsRef) localStorage.setItem(LOCAL_EVENTS_KEY + '_ts', ts);
   }, 700);
+}
+
+function cancelPendingSaves() {
+  Object.keys(_fbTimers).forEach(k => { clearTimeout(_fbTimers[k]); delete _fbTimers[k]; });
 }
 
 // ── State ──────────────────────────────────────────────────────────────────
@@ -2159,7 +2163,6 @@ function setupFirebaseSync() {
   todosRef.onSnapshot(snap => {
     if (snap.metadata.hasPendingWrites) return;
     if (!snap.exists) {
-      // Firestore 비어있음 → 로컬 데이터 즉시 업로드
       if (data.sections && data.sections.length > 0) fbSave(todosRef, { sections: data.sections });
       return;
     }
@@ -2168,6 +2171,7 @@ function setupFirebaseSync() {
     const remoteTime = remote.updatedAt || 0;
     const localTime  = parseInt(localStorage.getItem(STORAGE_KEY + '_ts') || '0');
     if (remoteTime >= localTime) {
+      cancelPendingSaves(); // 예약된 로컬→Firestore 덮어쓰기 타이머 전부 취소
       _applyingRemote = true;
       data = { sections: remote.sections };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -2181,7 +2185,6 @@ function setupFirebaseSync() {
   memosRef.onSnapshot(snap => {
     if (snap.metadata.hasPendingWrites) return;
     if (!snap.exists) {
-      // Firestore 비어있음 → 로컬 데이터 즉시 업로드
       if (memos.length > 0) fbSave(memosRef, { list: memos });
       return;
     }
@@ -2190,6 +2193,7 @@ function setupFirebaseSync() {
     const remoteTime = remote.updatedAt || 0;
     const localTime  = parseInt(localStorage.getItem(MEMO_LIST_KEY + '_ts') || '0');
     if (remoteTime >= localTime) {
+      cancelPendingSaves();
       _applyingRemote = true;
       memos = remote.list;
       localStorage.setItem(MEMO_LIST_KEY, JSON.stringify(memos));
@@ -2212,6 +2216,7 @@ function setupFirebaseSync() {
     const remoteTime = remote.updatedAt || 0;
     const localTime  = parseInt(localStorage.getItem(LOCAL_EVENTS_KEY + '_ts') || '0');
     if (remoteTime >= localTime) {
+      cancelPendingSaves();
       _applyingRemote = true;
       localEvents = remote.events;
       localStorage.setItem(LOCAL_EVENTS_KEY, JSON.stringify(localEvents));
