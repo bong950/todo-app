@@ -1781,7 +1781,6 @@ function gisLoaded() {
   maybeEnable();
 }
 
-const GCAL_EMAIL = 'bongsu95@gmail.com';
 let silentAuthDone = false;
 
 function setAuthBtnSynced() {
@@ -1805,7 +1804,7 @@ function trySilentAuth(retryCount = 0) {
     setAuthBtnSynced();
     await fetchCalEvents();
   };
-  tokenClient.requestAccessToken({ prompt: 'none', login_hint: GCAL_EMAIL });
+  tokenClient.requestAccessToken({ prompt: 'none' });
 }
 
 function maybeEnable() {
@@ -1822,7 +1821,7 @@ async function handleAuthClick() {
     setAuthBtnSynced();
     await fetchCalEvents();
   };
-  tokenClient.requestAccessToken({ prompt: 'consent', login_hint: GCAL_EMAIL });
+  tokenClient.requestAccessToken({ prompt: 'consent' });
 }
 
 async function fetchCalEvents() {
