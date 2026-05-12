@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>할 일 관리</title>
+<script src="https://apis.google.com/js/api.js" async defer onload="gapiLoaded()"></script>
+<script src="https://accounts.google.com/gsi/client" async defer onload="gisLoaded()"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
@@ -224,6 +226,62 @@
     border-color: var(--accent);
     color: var(--accent);
   }
+
+  .cal-auth-btn {
+    font-size: 11px;
+    color: #fff;
+    background: #4285f4;
+    border: none;
+    border-radius: 4px;
+    padding: 3px 9px;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 500;
+    transition: all var(--transition);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .cal-auth-btn:hover { background: #3367d6; }
+  .cal-auth-btn:disabled { background: #ccc; cursor: default; }
+  .cal-auth-btn.synced { background: #34a853; }
+
+  .event-dot-row {
+    display: flex;
+    justify-content: center;
+    gap: 2px;
+    position: absolute;
+    bottom: 3px;
+    left: 0; right: 0;
+  }
+  .event-dot {
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: #4285f4;
+  }
+  .cal-day { position: relative; }
+  .cal-day.today .event-dot { background: #fff; }
+
+  .cal-event-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12.5px;
+  }
+  .cal-event-item:last-child { border-bottom: none; }
+  .cal-event-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #4285f4;
+    flex-shrink: 0;
+    margin-top: 3px;
+  }
+  .cal-event-title { color: var(--text-primary); font-weight: 400; line-height: 1.4; }
+  .cal-event-time  { color: var(--text-secondary); font-size: 11px; }
+  .cal-panel-date  { font-size: 12px; font-weight: 500; color: var(--text-secondary); padding: 8px 0 4px; }
+  .cal-no-event    { font-size: 12px; color: var(--text-secondary); padding: 8px 0; }
 
   @media (max-width: 800px) {
     .page { flex-direction: column; }
@@ -622,12 +680,16 @@
       <div class="cal-header">
         <span class="cal-month-label" id="calMonthLabel"></span>
         <div style="display:flex;align-items:center;gap:8px">
+          <button class="cal-auth-btn" id="calAuthBtn" onclick="handleAuthClick()" disabled>구글 연동</button>
           <button class="cal-today-btn" onclick="calGoToday()">오늘</button>
           <div class="cal-nav">
             <button class="cal-nav-btn" onclick="calMove(-1)">&#8249;</button>
             <button class="cal-nav-btn" onclick="calMove(1)">&#8250;</button>
           </div>
         </div>
+      </div>
+      <div id="calEventPanel" style="display:none; padding:0 14px 12px; border-top:1px solid var(--border); margin-top:4px;">
+        <div id="calEventList" style="margin-top:10px;"></div>
       </div>
       <div class="cal-grid">
         <div class="cal-weekdays">
@@ -930,6 +992,114 @@ function updateDate() {
 updateDate();
 render();
 
+// ── Google Calendar ────────────────────────────────────────────────────────
+
+const CLIENT_ID = '244186845410-189k09ovq59qmm8obgie5r2j96a2vu9f.apps.googleusercontent.com';
+const SCOPES    = 'https://www.googleapis.com/auth/calendar.readonly';
+
+let gapiInited = false;
+let gisInited  = false;
+let tokenClient;
+let calEvents  = {};
+
+function gapiLoaded() {
+  gapi.load('client', async () => {
+    await gapi.client.init({
+      discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
+    });
+    gapiInited = true;
+    maybeEnable();
+  });
+}
+
+function gisLoaded() {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPES,
+    callback: '',
+  });
+  gisInited = true;
+  maybeEnable();
+}
+
+function maybeEnable() {
+  if (gapiInited && gisInited) {
+    document.getElementById('calAuthBtn').disabled = false;
+  }
+}
+
+async function handleAuthClick() {
+  tokenClient.callback = async (resp) => {
+    if (resp.error) { console.error(resp); return; }
+    const btn = document.getElementById('calAuthBtn');
+    btn.textContent = '동기화 ✓';
+    btn.classList.add('synced');
+    await fetchCalEvents();
+  };
+  if (gapi.client.getToken() === null) {
+    tokenClient.requestAccessToken({ prompt: 'consent' });
+  } else {
+    await fetchCalEvents();
+  }
+}
+
+async function fetchCalEvents() {
+  const start = new Date(calYear, calMonth, 1).toISOString();
+  const end   = new Date(calYear, calMonth + 1, 0, 23, 59, 59).toISOString();
+  try {
+    const res = await gapi.client.calendar.events.list({
+      calendarId: 'primary',
+      timeMin: start,
+      timeMax: end,
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 100,
+    });
+    calEvents = {};
+    (res.result.items || []).forEach(ev => {
+      const d = new Date(ev.start.dateTime || ev.start.date);
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      if (!calEvents[key]) calEvents[key] = [];
+      calEvents[key].push(ev);
+    });
+    renderCal();
+  } catch(e) { console.error(e); }
+}
+
+function showDayEvents(y, m, d) {
+  const key = `${y}-${m}-${d}`;
+  const events = calEvents[key] || [];
+  const panel = document.getElementById('calEventPanel');
+  const list  = document.getElementById('calEventList');
+
+  if (events.length === 0 && Object.keys(calEvents).length === 0) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  panel.style.display = 'block';
+  const dateStr = `${y}년 ${m+1}월 ${d}일`;
+  list.innerHTML = `<div class="cal-panel-date">${dateStr}</div>`;
+
+  if (events.length === 0) {
+    list.innerHTML += `<div class="cal-no-event">일정 없음</div>`;
+    return;
+  }
+  events.forEach(ev => {
+    const timeStr = ev.start.dateTime
+      ? new Date(ev.start.dateTime).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+      : '종일';
+    list.innerHTML += `
+      <div class="cal-event-item">
+        <span class="cal-event-dot" style="background:${ev.colorId ? '#'+ev.colorId : '#4285f4'}"></span>
+        <div>
+          <div class="cal-event-title">${escHtml(ev.summary || '(제목 없음)')}</div>
+          <div class="cal-event-time">${timeStr}</div>
+        </div>
+      </div>`;
+  });
+}
+
 // ── Calendar ───────────────────────────────────────────────────────────────
 
 let calYear, calMonth, calSelected;
@@ -946,14 +1116,16 @@ function calMove(dir) {
   calMonth += dir;
   if (calMonth > 11) { calMonth = 0; calYear++; }
   if (calMonth < 0)  { calMonth = 11; calYear--; }
-  renderCal();
+  if (gapi.client && gapi.client.getToken()) fetchCalEvents();
+  else renderCal();
 }
 
 function calGoToday() {
   const today = new Date();
   calYear  = today.getFullYear();
   calMonth = today.getMonth();
-  renderCal();
+  if (gapi.client && gapi.client.getToken()) fetchCalEvents();
+  else renderCal();
 }
 
 function renderCal() {
@@ -961,15 +1133,13 @@ function renderCal() {
   const months = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
   document.getElementById('calMonthLabel').textContent = `${calYear}년 ${months[calMonth]}`;
 
-  const firstDay  = new Date(calYear, calMonth, 1).getDay();
-  const lastDate  = new Date(calYear, calMonth + 1, 0).getDate();
-  const prevLast  = new Date(calYear, calMonth, 0).getDate();
+  const firstDay = new Date(calYear, calMonth, 1).getDay();
+  const lastDate = new Date(calYear, calMonth + 1, 0).getDate();
+  const prevLast = new Date(calYear, calMonth, 0).getDate();
+  const totalCells = Math.ceil((firstDay + lastDate) / 7) * 7;
 
   const grid = document.getElementById('calDays');
   grid.innerHTML = '';
-
-  let dayCount = 0;
-  const totalCells = Math.ceil((firstDay + lastDate) / 7) * 7;
 
   for (let i = 0; i < totalCells; i++) {
     const cell = document.createElement('div');
@@ -977,42 +1147,47 @@ function renderCal() {
 
     let num, isOther = false;
     if (i < firstDay) {
-      num = prevLast - firstDay + i + 1;
-      isOther = true;
+      num = prevLast - firstDay + i + 1; isOther = true;
       cell.classList.add('other-month');
     } else if (i >= firstDay + lastDate) {
-      num = i - firstDay - lastDate + 1;
-      isOther = true;
+      num = i - firstDay - lastDate + 1; isOther = true;
       cell.classList.add('other-month');
     } else {
       num = i - firstDay + 1;
     }
 
-    cell.textContent = num;
+    const numSpan = document.createElement('span');
+    numSpan.textContent = num;
+    cell.appendChild(numSpan);
 
     const col = i % 7;
     if (!isOther) {
       if (col === 0) cell.classList.add('sunday');
       if (col === 6) cell.classList.add('saturday');
-    }
 
-    if (!isOther &&
-        num === today.getDate() &&
-        calMonth === today.getMonth() &&
-        calYear  === today.getFullYear()) {
-      cell.classList.add('today');
-    }
+      if (num === today.getDate() && calMonth === today.getMonth() && calYear === today.getFullYear())
+        cell.classList.add('today');
 
-    if (!isOther && calSelected &&
-        num === calSelected.d &&
-        calMonth === calSelected.m &&
-        calYear  === calSelected.y) {
-      cell.classList.add('selected');
-    }
+      if (calSelected && num === calSelected.d && calMonth === calSelected.m && calYear === calSelected.y)
+        cell.classList.add('selected');
 
-    if (!isOther) {
+      // 이벤트 점
+      const key = `${calYear}-${calMonth}-${num}`;
+      if (calEvents[key] && calEvents[key].length > 0) {
+        const dotRow = document.createElement('div');
+        dotRow.className = 'event-dot-row';
+        const count = Math.min(calEvents[key].length, 3);
+        for (let d = 0; d < count; d++) {
+          const dot = document.createElement('span');
+          dot.className = 'event-dot';
+          dotRow.appendChild(dot);
+        }
+        cell.appendChild(dotRow);
+      }
+
       cell.addEventListener('click', () => {
         calSelected = { y: calYear, m: calMonth, d: num };
+        showDayEvents(calYear, calMonth, num);
         renderCal();
       });
     } else {
