@@ -1340,6 +1340,13 @@ function defaultData() {
         name: '장기',
         open: true,
         items: []
+      },
+      {
+        id: uid(),
+        name: '완료',
+        open: true,
+        _system: true,
+        items: []
       }
     ]
   };
@@ -1356,6 +1363,9 @@ function loadData() {
       }
       if (!names.includes('장기')) {
         parsed.sections.push({ id: uid(), name: '장기', open: true, items: [] });
+      }
+      if (!parsed.sections.find(s => s._system)) {
+        parsed.sections.push({ id: uid(), name: '완료', open: true, _system: true, items: [] });
       }
       return parsed;
     }
@@ -1377,6 +1387,12 @@ function uid() {
 // ── Rendering ──────────────────────────────────────────────────────────────
 
 function render() {
+  // 완료 섹션은 항상 맨 마지막
+  const sysIdx = data.sections.findIndex(s => s._system);
+  if (sysIdx !== -1 && sysIdx !== data.sections.length - 1) {
+    const [sys] = data.sections.splice(sysIdx, 1);
+    data.sections.push(sys);
+  }
   const list = document.getElementById('sectionList');
   list.innerHTML = '';
   data.sections.forEach(sec => {
@@ -1400,34 +1416,46 @@ function buildSection(sec) {
   // Header
   const hdr = document.createElement('div');
   hdr.className = 'section-header';
-  hdr.innerHTML = `
-    <span class="toggle-arrow">
-      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="4,2 10,7 4,12"/>
-      </svg>
-    </span>
-    <input class="section-name" type="text" value="${escHtml(sec.name)}" placeholder="섹션 이름" />
-    <span class="section-count">${pending.length}/${total}</span>
-    <button class="section-del-btn" title="섹션 삭제">✕</button>
-  `;
+  if (sec._system) {
+    hdr.innerHTML = `
+      <span class="toggle-arrow">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="4,2 10,7 4,12"/>
+        </svg>
+      </span>
+      <span class="section-name" style="cursor:default;color:var(--text-secondary)">✓ ${escHtml(sec.name)}</span>
+      <span class="section-count">${total}</span>
+    `;
+  } else {
+    hdr.innerHTML = `
+      <span class="toggle-arrow">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="4,2 10,7 4,12"/>
+        </svg>
+      </span>
+      <input class="section-name" type="text" value="${escHtml(sec.name)}" placeholder="섹션 이름" />
+      <span class="section-count">${pending.length}/${total}</span>
+      <button class="section-del-btn" title="섹션 삭제">✕</button>
+    `;
+    hdr.querySelector('.section-name').addEventListener('change', e => {
+      sec.name = e.target.value;
+      saveData();
+    });
+    hdr.querySelector('.section-name').addEventListener('click', e => e.stopPropagation());
+    hdr.querySelector('.section-del-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      if (sec.items.length === 0 || confirm(`"${sec.name}" 섹션을 삭제할까요?`)) {
+        pushHistory();
+        data.sections = data.sections.filter(s => s.id !== sec.id);
+        render();
+      }
+    });
+  }
   hdr.querySelector('.toggle-arrow').addEventListener('click', e => {
     e.stopPropagation();
     sec.open = !sec.open;
     saveData();
     wrap.classList.toggle('open', sec.open);
-  });
-  hdr.querySelector('.section-name').addEventListener('change', e => {
-    sec.name = e.target.value;
-    saveData();
-  });
-  hdr.querySelector('.section-name').addEventListener('click', e => e.stopPropagation());
-  hdr.querySelector('.section-del-btn').addEventListener('click', e => {
-    e.stopPropagation();
-    if (sec.items.length === 0 || confirm(`"${sec.name}" 섹션을 삭제할까요?`)) {
-      pushHistory();
-      data.sections = data.sections.filter(s => s.id !== sec.id);
-      render();
-    }
   });
   wrap.appendChild(hdr);
 
@@ -1462,56 +1490,58 @@ function buildSection(sec) {
     }
   });
 
-  pending.forEach(item => ul.appendChild(buildItem(item, sec)));
+  if (sec._system) {
+    // 완료 섹션: 모든 항목 그대로 표시, 입력창 없음
+    sec.items.forEach(item => ul.appendChild(buildItem(item, sec)));
+  } else {
+    pending.forEach(item => ul.appendChild(buildItem(item, sec)));
 
-  if (done.length > 0) {
-    if (sec.doneOpen === undefined) sec.doneOpen = true;
-
-    const div = document.createElement('div');
-    div.className = 'done-divider';
-    div.innerHTML = `
-      <div class="done-divider-line"></div>
-      <span class="done-divider-label">
-        <span class="done-toggle-arrow ${sec.doneOpen ? 'open' : ''}">▶</span>
-        완료 ${done.length}개
-      </span>
-      <div class="done-divider-line"></div>
-    `;
-    div.addEventListener('click', () => {
-      sec.doneOpen = !sec.doneOpen;
-      saveData();
-      render();
-    });
-    ul.appendChild(div);
-
-    if (sec.doneOpen) {
-      done.forEach(item => ul.appendChild(buildItem(item, sec)));
-    }
-  }
-
-  // Add row
-  const addRow = document.createElement('div');
-  addRow.className = 'add-item-row';
-  addRow.innerHTML = `
-    <span class="add-item-icon" style="color:#c5c1bb">+</span>
-    <input class="add-item-input" type="text" placeholder="할 일 추가..." />
-  `;
-  addRow.querySelector('.add-item-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-      const val = e.target.value.trim();
-      if (val) {
-        pushHistory();
-        sec.items.push({ id: uid(), text: val, done: false, sub: false, link: '' });
+    if (done.length > 0) {
+      if (sec.doneOpen === undefined) sec.doneOpen = true;
+      const div = document.createElement('div');
+      div.className = 'done-divider';
+      div.innerHTML = `
+        <div class="done-divider-line"></div>
+        <span class="done-divider-label">
+          <span class="done-toggle-arrow ${sec.doneOpen ? 'open' : ''}">▶</span>
+          완료 ${done.length}개
+        </span>
+        <div class="done-divider-line"></div>
+      `;
+      div.addEventListener('click', () => {
+        sec.doneOpen = !sec.doneOpen;
+        saveData();
         render();
-        // Re-focus after render
-        setTimeout(() => {
-          const secEl = document.querySelector(`[data-id="${sec.id}"]`);
-          if (secEl) secEl.querySelector('.add-item-input').focus();
-        }, 30);
+      });
+      ul.appendChild(div);
+      if (sec.doneOpen) {
+        done.forEach(item => ul.appendChild(buildItem(item, sec)));
       }
     }
-  });
-  ul.appendChild(addRow);
+
+    // Add row
+    const addRow = document.createElement('div');
+    addRow.className = 'add-item-row';
+    addRow.innerHTML = `
+      <span class="add-item-icon" style="color:#c5c1bb">+</span>
+      <input class="add-item-input" type="text" placeholder="할 일 추가..." />
+    `;
+    addRow.querySelector('.add-item-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        const val = e.target.value.trim();
+        if (val) {
+          pushHistory();
+          sec.items.push({ id: uid(), text: val, done: false, sub: false, link: '' });
+          render();
+          setTimeout(() => {
+            const secEl = document.querySelector(`[data-id="${sec.id}"]`);
+            if (secEl) secEl.querySelector('.add-item-input').focus();
+          }, 30);
+        }
+      }
+    });
+    ul.appendChild(addRow);
+  }
 
   wrap.appendChild(ul);
   return wrap;
@@ -1589,9 +1619,28 @@ function buildItem(item, sec) {
     pushHistory();
     item.done = e.target.checked;
     row.classList.toggle('done', item.done);
-    // animate then re-render
     row.classList.add(item.done ? 'animate-exit-down' : 'animate-exit-up');
-    setTimeout(() => render(), 340);
+    setTimeout(() => {
+      if (item.done) {
+        // 완료 섹션으로 이동
+        const doneSec = data.sections.find(s => s._system);
+        if (doneSec && sec.id !== doneSec.id) {
+          sec.items = sec.items.filter(i => i.id !== item.id);
+          item.originSecId = sec.id;
+          doneSec.items.unshift(item);
+        }
+      } else if (sec._system) {
+        // 원래 섹션으로 복귀
+        const origin = data.sections.find(s => s.id === item.originSecId && !s._system)
+                    || data.sections.find(s => !s._system);
+        if (origin) {
+          sec.items = sec.items.filter(i => i.id !== item.id);
+          delete item.originSecId;
+          origin.items.push(item);
+        }
+      }
+      render();
+    }, 340);
   });
 
   // Editable text
