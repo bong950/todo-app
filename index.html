@@ -1176,6 +1176,8 @@ function gisLoaded() {
   maybeEnable();
 }
 
+const HINT_KEY = 'gcal_account_hint';
+
 function setAuthBtnSynced() {
   const btn = document.getElementById('calAuthBtn');
   btn.textContent = '동기화 ✓';
@@ -1185,27 +1187,37 @@ function setAuthBtnSynced() {
 
 function maybeEnable() {
   if (!gapiInited || !gisInited) return;
-  const btn = document.getElementById('calAuthBtn');
-  btn.disabled = false;
+  document.getElementById('calAuthBtn').disabled = false;
 
-  // 이전에 허용한 적 있으면 팝업 없이 자동 토큰 발급
+  const savedHint = localStorage.getItem(HINT_KEY);
+  if (!savedHint) return; // 한 번도 연동 안 한 경우 → 버튼 클릭 대기
+
+  // 저장된 계정으로 팝업 없이 자동 토큰 발급
   tokenClient.callback = async (resp) => {
-    if (resp.error) return; // 조용히 실패 (첫 방문 등)
+    if (resp.error) return; // 조용히 실패
     gapi.client.setToken({ access_token: resp.access_token });
     setAuthBtnSynced();
     await fetchCalEvents();
   };
-  tokenClient.requestAccessToken({ prompt: 'none' });
+  tokenClient.requestAccessToken({ prompt: 'none', login_hint: savedHint });
 }
 
 async function handleAuthClick() {
   tokenClient.callback = async (resp) => {
     if (resp.error) { console.error(resp); return; }
     gapi.client.setToken({ access_token: resp.access_token });
+    // 선택한 계정 이메일 저장 (이후 자동 로그인에 사용)
+    try {
+      const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${resp.access_token}` }
+      });
+      const info = await r.json();
+      if (info.email) localStorage.setItem(HINT_KEY, info.email);
+    } catch(e) {}
     setAuthBtnSynced();
     await fetchCalEvents();
   };
-  tokenClient.requestAccessToken({ prompt: 'consent' });
+  tokenClient.requestAccessToken({ prompt: 'select_account' });
 }
 
 async function fetchCalEvents() {
