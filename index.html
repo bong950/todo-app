@@ -804,6 +804,107 @@
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #ddd9d3; border-radius: 3px; }
+
+  /* ── Memo ── */
+  .memo-fab {
+    position: fixed;
+    bottom: 28px;
+    right: 28px;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    font-size: 22px;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(35,131,226,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    transition: all 0.2s ease;
+  }
+  .memo-fab:hover { background: var(--accent-hover); transform: scale(1.08); }
+  .memo-fab.open { background: #888; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+
+  .memo-panel {
+    position: fixed;
+    bottom: 92px;
+    right: 28px;
+    width: 320px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    z-index: 199;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    animation: memoIn 0.2s cubic-bezier(0.0,0.0,0.2,1);
+  }
+  .memo-panel.open { display: flex; }
+
+  @keyframes memoIn {
+    from { opacity: 0; transform: translateY(12px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .memo-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .memo-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .memo-saved {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-weight: 400;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .memo-saved.show { opacity: 1; }
+  .memo-clear-btn {
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-family: inherit;
+    transition: all var(--transition);
+  }
+  .memo-clear-btn:hover { background: #fff0f0; color: var(--danger); }
+
+  .memo-textarea {
+    width: 100%;
+    height: 220px;
+    border: none;
+    outline: none;
+    resize: none;
+    padding: 12px 14px;
+    font-size: 13.5px;
+    font-family: inherit;
+    color: var(--text-primary);
+    line-height: 1.7;
+    background: transparent;
+  }
+  .memo-textarea::placeholder { color: #c5c1bb; }
+
+  @media (max-width: 800px) {
+    .memo-fab { bottom: 20px; right: 16px; width: 48px; height: 48px; font-size: 20px; }
+    .memo-panel { right: 12px; left: 12px; width: auto; bottom: 80px; }
+  }
 </style>
 </head>
 <body>
@@ -1419,6 +1520,55 @@ function renderCal() {
 }
 
 calInit();
+
+// ── Memo ───────────────────────────────────────────────────────────────────
+
+const MEMO_KEY = 'quick_memo';
+let memoSaveTimer;
+
+function toggleMemo() {
+  const panel = document.getElementById('memoPanel');
+  const fab   = document.getElementById('memoFab');
+  const isOpen = panel.classList.contains('open');
+  panel.classList.toggle('open', !isOpen);
+  fab.classList.toggle('open', !isOpen);
+  fab.textContent = isOpen ? '📝' : '✕';
+  if (!isOpen) document.getElementById('memoTextarea').focus();
+}
+
+function initMemo() {
+  const ta = document.getElementById('memoTextarea');
+  ta.value = localStorage.getItem(MEMO_KEY) || '';
+  ta.addEventListener('input', () => {
+    clearTimeout(memoSaveTimer);
+    memoSaveTimer = setTimeout(() => {
+      localStorage.setItem(MEMO_KEY, ta.value);
+      const saved = document.getElementById('memoSaved');
+      saved.classList.add('show');
+      setTimeout(() => saved.classList.remove('show'), 1500);
+    }, 500);
+  });
+}
+
+function clearMemo() {
+  if (!confirm('메모를 전부 지울까요?')) return;
+  document.getElementById('memoTextarea').value = '';
+  localStorage.removeItem(MEMO_KEY);
+}
+
+initMemo();
 </script>
+
+<!-- Memo FAB -->
+<button class="memo-fab" id="memoFab" onclick="toggleMemo()">📝</button>
+
+<div class="memo-panel" id="memoPanel">
+  <div class="memo-header">
+    <span class="memo-title">📝 빠른 메모 <span class="memo-saved" id="memoSaved">저장됨</span></span>
+    <button class="memo-clear-btn" onclick="clearMemo()">전체 삭제</button>
+  </div>
+  <textarea class="memo-textarea" id="memoTextarea" placeholder="여기에 메모하세요...&#10;자동으로 저장됩니다."></textarea>
+</div>
+
 </body>
 </html>
