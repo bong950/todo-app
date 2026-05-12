@@ -1635,18 +1635,41 @@ function renderUpcoming() {
   const list = document.getElementById('upcomingList');
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const months = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  const todayStr = today.toDateString();
 
-  // 오늘 이후 일정만 모아서 날짜순 정렬
   const upcoming = [];
+
+  // 구글 캘린더 일정
   Object.entries(calEvents).forEach(([key, events]) => {
     events.forEach(ev => {
       const d = new Date(ev.start.dateTime || ev.start.date);
-      if (d >= today) upcoming.push(ev);
+      if (d >= today) upcoming.push({
+        date: d,
+        title: ev.summary || '(제목 없음)',
+        timeStr: ev.start.dateTime
+          ? d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+          : '종일'
+      });
     });
   });
-  upcoming.sort((a, b) => {
-    return new Date(a.start.dateTime || a.start.date) - new Date(b.start.dateTime || b.start.date);
+
+  // 로컬 일정
+  Object.entries(localEvents).forEach(([key, events]) => {
+    const [y, m, d] = key.split('-').map(Number);
+    const date = new Date(y, m, d);
+    if (date >= today) {
+      events.forEach(ev => {
+        upcoming.push({
+          date,
+          title: ev.name,
+          timeStr: ev.start ? `${ev.start}${ev.end ? ' ~ ' + ev.end : ''}` : '종일'
+        });
+      });
+    }
   });
+
+  upcoming.sort((a, b) => a.date - b.date);
 
   card.style.display = 'block';
   list.innerHTML = '';
@@ -1656,26 +1679,18 @@ function renderUpcoming() {
     return;
   }
 
-  const months = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
-  const todayStr = today.toDateString();
-
   upcoming.slice(0, 10).forEach(ev => {
-    const d = new Date(ev.start.dateTime || ev.start.date);
-    const isToday = d.toDateString() === todayStr;
-    const timeStr = ev.start.dateTime
-      ? d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
-      : '종일';
-
+    const isToday = ev.date.toDateString() === todayStr;
     const item = document.createElement('div');
     item.className = 'upcoming-item';
     item.innerHTML = `
       <div class="upcoming-date-badge ${isToday ? 'today-badge' : ''}">
-        <div class="badge-month">${months[d.getMonth()]}</div>
-        <div class="badge-day">${d.getDate()}</div>
+        <div class="badge-month">${months[ev.date.getMonth()]}</div>
+        <div class="badge-day">${ev.date.getDate()}</div>
       </div>
       <div class="upcoming-info">
-        <div class="upcoming-title">${escHtml(ev.summary || '(제목 없음)')}</div>
-        <div class="upcoming-time">${isToday ? '오늘 · ' : ''}${timeStr}</div>
+        <div class="upcoming-title">${escHtml(ev.title)}</div>
+        <div class="upcoming-time">${isToday ? '오늘 · ' : ''}${ev.timeStr}</div>
       </div>
       <span class="upcoming-dot"></span>
     `;
@@ -1728,6 +1743,7 @@ function saveLocalEvent() {
   closeLocalEventModal();
   showDayEvents(y, m, d);
   renderCal();
+  renderUpcoming();
 }
 
 function deleteLocalEvent(key, id) {
@@ -1737,9 +1753,11 @@ function deleteLocalEvent(key, id) {
   const { y, m, d } = calSelected || {};
   if (y !== undefined) showDayEvents(y, m, d);
   renderCal();
+  renderUpcoming();
 }
 
 loadLocalEvents();
+renderUpcoming();
 
 function showDayEvents(y, m, d) {
   const key = `${y}-${m}-${d}`;
