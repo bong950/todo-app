@@ -1356,9 +1356,31 @@ function migrateSections(sections) {
   const names = sections.map(s => s.name);
   if (!names.includes('단기')) sections.push({ id: uid(), name: '단기', open: true, items: [] });
   if (!names.includes('장기')) sections.push({ id: uid(), name: '장기', open: true, items: [] });
-  if (!sections.find(s => s._system)) {
-    sections.push({ id: uid(), name: '완료', open: true, _system: true, items: [] });
+
+  // 완료 섹션 확보: _system 없으면 이름으로 찾거나 새로 생성
+  let doneSec = sections.find(s => s._system);
+  if (!doneSec) {
+    doneSec = sections.find(s => s.name === '완료');
+    if (doneSec) {
+      doneSec._system = true;
+    } else {
+      doneSec = { id: uid(), name: '완료', open: true, _system: true, items: [] };
+      sections.push(doneSec);
+    }
   }
+
+  // 기존 done 항목을 완료 섹션으로 이동 (기존 데이터 마이그레이션)
+  sections.forEach(sec => {
+    if (sec._system) return;
+    const doneItems = sec.items.filter(i => i.done);
+    if (doneItems.length === 0) return;
+    sec.items = sec.items.filter(i => !i.done);
+    doneItems.forEach(item => {
+      if (!item.originSecId) item.originSecId = sec.id;
+      if (!doneSec.items.find(i => i.id === item.id)) doneSec.items.push(item);
+    });
+  });
+
   return sections;
 }
 
@@ -1624,7 +1646,7 @@ function buildItem(item, sec) {
     setTimeout(() => {
       if (item.done) {
         // 완료 섹션으로 이동
-        const doneSec = data.sections.find(s => s._system);
+        const doneSec = data.sections.find(s => s._system) || data.sections.find(s => s.name === '완료');
         if (doneSec && sec.id !== doneSec.id) {
           sec.items = sec.items.filter(i => i.id !== item.id);
           item.originSecId = sec.id;
