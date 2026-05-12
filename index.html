@@ -433,6 +433,19 @@
     flex-shrink: 0;
     margin-top: 5px;
   }
+  .upcoming-delete {
+    display: none;
+    background: none;
+    border: none;
+    color: #ccc;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0 0 0 6px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .upcoming-delete:hover { color: #e55; }
+  .upcoming-item:hover .upcoming-delete { display: block; }
   .upcoming-empty {
     padding: 16px;
     font-size: 12.5px;
@@ -1908,7 +1921,10 @@ function renderUpcoming() {
         upcoming.push({
           date,
           title: ev.name,
-          timeStr: ev.start ? `${ev.start}${ev.end ? ' ~ ' + ev.end : ''}` : '종일'
+          timeStr: ev.start ? `${ev.start}${ev.end ? ' ~ ' + ev.end : ''}` : '종일',
+          isLocal: true,
+          localKey: key,
+          localId: ev.id
         });
       });
     }
@@ -1940,10 +1956,17 @@ function renderUpcoming() {
         <div class="upcoming-time">${isToday ? '오늘 · ' : ''}${ev.timeStr}</div>
         <div class="upcoming-comment ${commentText ? '' : 'empty'}">${escHtml(commentText) || '메모 추가...'}</div>
       </div>
-      <span class="upcoming-dot"></span>
+      ${ev.isLocal ? '<button class="upcoming-delete">×</button>' : '<span class="upcoming-dot"></span>'}
     `;
     const commentEl = item.querySelector('.upcoming-comment');
     attachCommentEdit(commentEl, commentKey);
+    if (ev.isLocal) {
+      item.querySelector('.upcoming-delete').addEventListener('click', () => {
+        if (confirm(`"${ev.title}" 일정을 삭제할까요?`)) {
+          deleteLocalEvent(ev.localKey, ev.localId);
+        }
+      });
+    }
     list.appendChild(item);
   });
 }
