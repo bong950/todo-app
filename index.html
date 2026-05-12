@@ -6,6 +6,9 @@
 <title>할 일 관리</title>
 <script src="https://apis.google.com/js/api.js" async defer onload="gapiLoaded()"></script>
 <script src="https://accounts.google.com/gsi/client" async defer onload="gisLoaded()"></script>
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
@@ -1193,6 +1196,41 @@
 </div>
 
 <script>
+// ── Firebase ───────────────────────────────────────────────────────────────
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyBGmKzQ4GvM4qZM3VrRe4kO34Wc38-ZaLo",
+  authDomain:        "todo-app-d9e11.firebaseapp.com",
+  projectId:         "todo-app-d9e11",
+  storageBucket:     "todo-app-d9e11.firebasestorage.app",
+  messagingSenderId: "967818742771",
+  appId:             "1:967818742771:web:e5ce4faec0bd64750e2086"
+};
+
+let db = null;
+let todosRef = null, memosRef = null, eventsRef = null;
+const _fbTimers = {};
+let _applyingRemote = false;
+
+try {
+  firebase.initializeApp(FIREBASE_CONFIG);
+  db = firebase.firestore();
+  db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+
+  const FB_USER = 'bong950';
+  todosRef  = db.doc(`users/${FB_USER}/data/todos`);
+  memosRef  = db.doc(`users/${FB_USER}/data/memos`);
+  eventsRef = db.doc(`users/${FB_USER}/data/localEvents`);
+} catch(e) { console.warn('Firebase init failed, using localStorage only.', e); }
+
+function fbSave(ref, payload) {
+  if (!ref || _applyingRemote) return;
+  const key = ref.path;
+  clearTimeout(_fbTimers[key]);
+  _fbTimers[key] = setTimeout(() => {
+    ref.set({ ...payload, updatedAt: Date.now() }).catch(console.error);
+  }, 700);
+}
+
 // ── State ──────────────────────────────────────────────────────────────────
 
 const STORAGE_KEY = 'todo_data_v2';
@@ -1300,6 +1338,7 @@ function loadData() {
 function saveData(addHistory = false) {
   if (addHistory) pushHistory();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  fbSave(todosRef, { sections: data.sections });
 }
 
 function uid() {
@@ -1767,6 +1806,7 @@ function loadLocalEvents() {
 }
 function saveLocalEvents() {
   localStorage.setItem(LOCAL_EVENTS_KEY, JSON.stringify(localEvents));
+  fbSave(eventsRef, { events: localEvents });
 }
 
 function openLocalEventModal(y, m, d) {
@@ -2000,6 +2040,7 @@ function loadMemos() {
 }
 function saveMemos() {
   localStorage.setItem(MEMO_LIST_KEY, JSON.stringify(memos));
+  fbSave(memosRef, { list: memos });
 }
 
 function getMemoTitle(content) {
@@ -2104,6 +2145,50 @@ function handleOverlayClick(e) {
 }
 
 renderMemoList();
+
+// ── Firebase 실시간 동기화 ──────────────────────────────────────────────────
+function setupFirebaseSync() {
+  if (!db) return;
+
+  // Todos
+  todosRef.onSnapshot(snap => {
+    if (!snap.exists || snap.metadata.hasPendingWrites) return;
+    const remote = snap.data();
+    if (!remote || !remote.sections) return;
+    _applyingRemote = true;
+    data = { sections: remote.sections };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    render();
+    _applyingRemote = false;
+  });
+
+  // Memos
+  memosRef.onSnapshot(snap => {
+    if (!snap.exists || snap.metadata.hasPendingWrites) return;
+    const remote = snap.data();
+    if (!remote || !Array.isArray(remote.list)) return;
+    _applyingRemote = true;
+    memos = remote.list;
+    localStorage.setItem(MEMO_LIST_KEY, JSON.stringify(memos));
+    renderMemoList();
+    _applyingRemote = false;
+  });
+
+  // Local Calendar Events
+  eventsRef.onSnapshot(snap => {
+    if (!snap.exists || snap.metadata.hasPendingWrites) return;
+    const remote = snap.data();
+    if (!remote || !remote.events) return;
+    _applyingRemote = true;
+    localEvents = remote.events;
+    localStorage.setItem(LOCAL_EVENTS_KEY, JSON.stringify(localEvents));
+    renderCal();
+    renderUpcoming();
+    _applyingRemote = false;
+  });
+}
+
+setupFirebaseSync();
 </script>
 
 </body>
