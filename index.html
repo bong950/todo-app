@@ -1822,6 +1822,21 @@ function gisLoaded() {
 }
 
 let silentAuthDone = false;
+const GCAL_HINT_KEY = 'gcal_login_hint';
+
+function getSavedHint() {
+  return localStorage.getItem(GCAL_HINT_KEY) || '';
+}
+
+async function saveLoginHint(accessToken) {
+  try {
+    const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    const info = await res.json();
+    if (info.email) localStorage.setItem(GCAL_HINT_KEY, info.email);
+  } catch(e) {}
+}
 
 function setAuthBtnSynced() {
   const btn = document.getElementById('calAuthBtn');
@@ -1833,7 +1848,6 @@ function setAuthBtnSynced() {
 function trySilentAuth(retryCount = 0) {
   tokenClient.callback = async (resp) => {
     if (resp.error) {
-      // 실패 시 최대 3번까지 재시도 (간격: 1s, 2s, 3s)
       if (retryCount < 3) {
         setTimeout(() => trySilentAuth(retryCount + 1), (retryCount + 1) * 1000);
       }
@@ -1844,7 +1858,8 @@ function trySilentAuth(retryCount = 0) {
     setAuthBtnSynced();
     await fetchCalEvents();
   };
-  tokenClient.requestAccessToken({ prompt: 'none' });
+  const hint = getSavedHint();
+  tokenClient.requestAccessToken({ prompt: 'none', ...(hint && { login_hint: hint }) });
 }
 
 function maybeEnable() {
@@ -1858,10 +1873,12 @@ async function handleAuthClick() {
     if (resp.error) { console.error(resp); return; }
     silentAuthDone = true;
     gapi.client.setToken({ access_token: resp.access_token });
+    await saveLoginHint(resp.access_token);
     setAuthBtnSynced();
     await fetchCalEvents();
   };
-  tokenClient.requestAccessToken({ prompt: 'consent' });
+  const hint = getSavedHint();
+  tokenClient.requestAccessToken({ prompt: 'consent', ...(hint && { login_hint: hint }) });
 }
 
 async function fetchCalEvents() {
