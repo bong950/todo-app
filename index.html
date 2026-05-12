@@ -377,8 +377,62 @@
   }
 
   @media (max-width: 800px) {
-    .page { flex-direction: column; }
+    body { padding: 0 0 100px; -webkit-tap-highlight-color: transparent; }
+
+    .header { height: 48px; padding: 0 16px; }
+    .header-title { font-size: 14px; }
+    .header-date { font-size: 11px; }
+
+    .page {
+      flex-direction: column;
+      padding: 20px 12px 24px;
+      gap: 16px;
+    }
+
+    .page-title { font-size: 24px; margin-bottom: 18px; }
+
     .calendar-col { width: 100%; position: static; }
+
+    /* 달력 터치 최적화 */
+    .cal-day {
+      aspect-ratio: 1;
+      font-size: 14px;
+      min-height: 38px;
+    }
+    .cal-header { padding: 12px 14px; }
+    .cal-month-label { font-size: 14px; }
+    .cal-nav-btn { width: 32px; height: 32px; font-size: 18px; }
+    .cal-auth-btn { font-size: 12px; padding: 5px 10px; }
+    .cal-today-btn { font-size: 12px; padding: 4px 10px; }
+    .cal-grid { padding: 10px 10px 14px; }
+
+    /* 할일 아이템 터치 영역 확대 */
+    .todo-item { padding: 9px 12px 9px 10px; }
+    .todo-item.sub { padding-left: 36px; }
+    .item-actions { opacity: 1; }
+    .item-btn { padding: 5px 7px; }
+    .check-wrap { width: 18px; height: 18px; margin-top: 1px; }
+
+    /* 섹션 헤더 */
+    .section-header { padding: 14px 12px; }
+    .section-name { font-size: 14px; }
+    .section-del-btn { opacity: 1; }
+
+    /* 추가 입력 */
+    .add-item-row { padding: 8px 12px 12px 10px; }
+    .add-item-input { font-size: 14px; }
+    .add-section-btn { font-size: 13px; padding: 9px 14px; }
+
+    /* 다가오는 일정 */
+    .upcoming-item { padding: 10px 14px; }
+    .upcoming-title { font-size: 13.5px; }
+    .upcoming-header { padding: 13px 16px; }
+  }
+
+  /* iPhone SE 등 작은 화면 */
+  @media (max-width: 375px) {
+    .cal-day { font-size: 13px; }
+    .page { padding: 16px 10px 20px; }
   }
 
   /* ── Add Section ── */
