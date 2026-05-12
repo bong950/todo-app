@@ -805,106 +805,161 @@
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #ddd9d3; border-radius: 3px; }
 
-  /* ── Memo ── */
-  .memo-fab {
-    position: fixed;
-    bottom: 28px;
-    right: 28px;
-    width: 52px;
-    height: 52px;
-    border-radius: 50%;
-    background: var(--accent);
-    color: #fff;
-    border: none;
-    font-size: 22px;
-    cursor: pointer;
-    box-shadow: 0 4px 16px rgba(35,131,226,0.4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 200;
-    transition: all 0.2s ease;
-  }
-  .memo-fab:hover { background: var(--accent-hover); transform: scale(1.08); }
-  .memo-fab.open { background: #888; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-
-  .memo-panel {
-    position: fixed;
-    bottom: 92px;
-    right: 28px;
-    width: 320px;
+  /* ── Memo List Card ── */
+  .memo-list-card {
+    margin-top: 12px;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-md);
-    z-index: 199;
-    display: none;
-    flex-direction: column;
+    box-shadow: var(--shadow-sm);
     overflow: hidden;
-    animation: memoIn 0.2s cubic-bezier(0.0,0.0,0.2,1);
   }
-  .memo-panel.open { display: flex; }
-
-  @keyframes memoIn {
-    from { opacity: 0; transform: translateY(12px) scale(0.97); }
-    to   { opacity: 1; transform: translateY(0) scale(1); }
-  }
-
-  .memo-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 14px 10px;
-    border-bottom: 1px solid var(--border);
-  }
-  .memo-title {
+  .memo-list-header {
+    padding: 12px 16px;
     font-size: 13px;
     font-weight: 600;
     color: var(--text-primary);
+    border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
-    gap: 6px;
+    justify-content: space-between;
   }
-  .memo-saved {
+  .memo-list-header-left { display: flex; align-items: center; gap: 6px; }
+  .memo-add-btn {
+    width: 24px; height: 24px;
+    border-radius: 6px;
+    background: var(--accent-light);
+    border: none;
+    color: var(--accent);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all var(--transition);
+  }
+  .memo-add-btn:hover { background: var(--accent); color: #fff; }
+
+  .memo-list-body { padding: 4px 0 6px; }
+
+  .memo-list-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 16px;
+    cursor: pointer;
+    transition: background var(--transition);
+  }
+  .memo-list-item:hover { background: var(--bg); }
+  .memo-list-item-icon { font-size: 14px; flex-shrink: 0; }
+  .memo-list-item-info { flex: 1; min-width: 0; }
+  .memo-list-item-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .memo-list-item-preview {
     font-size: 11px;
     color: var(--text-secondary);
-    font-weight: 400;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 1px;
+  }
+  .memo-list-item-del {
     opacity: 0;
-    transition: opacity 0.3s;
-  }
-  .memo-saved.show { opacity: 1; }
-  .memo-clear-btn {
-    font-size: 11px;
-    color: var(--text-secondary);
     background: transparent;
     border: none;
+    color: var(--text-secondary);
     cursor: pointer;
-    padding: 3px 6px;
+    padding: 3px 5px;
+    border-radius: 4px;
+    font-size: 12px;
+    transition: all var(--transition);
+  }
+  .memo-list-item:hover .memo-list-item-del { opacity: 1; }
+  .memo-list-item-del:hover { background: #fff0f0; color: var(--danger); }
+  .memo-empty-msg {
+    padding: 14px 16px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-align: center;
+  }
+
+  /* ── Memo Editor Overlay ── */
+  .memo-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.3);
+    z-index: 300;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    backdrop-filter: blur(2px);
+  }
+  .memo-overlay.open { display: flex; }
+
+  .memo-editor {
+    background: #fffef7;
+    border-radius: 14px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    width: 100%;
+    max-width: 500px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: memoIn 0.2s cubic-bezier(0,0,0.2,1);
+  }
+
+  @keyframes memoIn {
+    from { opacity: 0; transform: translateY(16px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .memo-editor-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid #f0ead8;
+  }
+  .memo-editor-date {
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+  .memo-editor-actions { display: flex; gap: 6px; }
+  .memo-editor-btn {
+    background: transparent;
+    border: none;
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px 8px;
     border-radius: 4px;
     font-family: inherit;
     transition: all var(--transition);
   }
-  .memo-clear-btn:hover { background: #fff0f0; color: var(--danger); }
+  .memo-editor-btn:hover { background: #f0ead8; color: var(--text-primary); }
+  .memo-editor-btn.del:hover { background: #fff0f0; color: var(--danger); }
 
-  .memo-textarea {
-    width: 100%;
-    height: 220px;
+  .memo-editor-textarea {
+    flex: 1;
     border: none;
     outline: none;
     resize: none;
-    padding: 12px 14px;
-    font-size: 13.5px;
+    padding: 16px 20px 20px;
+    font-size: 15px;
     font-family: inherit;
     color: var(--text-primary);
-    line-height: 1.7;
+    line-height: 1.8;
     background: transparent;
+    min-height: 260px;
   }
-  .memo-textarea::placeholder { color: #c5c1bb; }
-
-  @media (max-width: 800px) {
-    .memo-fab { bottom: 20px; right: 16px; width: 48px; height: 48px; font-size: 20px; }
-    .memo-panel { right: 12px; left: 12px; width: auto; bottom: 80px; }
-  }
+  .memo-editor-textarea::placeholder { color: #ccc8bb; }
 </style>
 </head>
 <body>
@@ -959,6 +1014,29 @@
       </div>
       <div class="upcoming-list" id="upcomingList"></div>
     </div>
+
+    <div class="memo-list-card">
+      <div class="memo-list-header">
+        <span class="memo-list-header-left">📝 메모</span>
+        <button class="memo-add-btn" onclick="openMemoEditor(null)" title="새 메모">+</button>
+      </div>
+      <div class="memo-list-body" id="memoListBody"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Memo Editor Overlay -->
+<div class="memo-overlay" id="memoOverlay" onclick="handleOverlayClick(event)">
+  <div class="memo-editor" id="memoEditor">
+    <div class="memo-editor-toolbar">
+      <span class="memo-editor-date" id="memoEditorDate"></span>
+      <div class="memo-editor-actions">
+        <button class="memo-editor-btn del" onclick="deleteMemo()">삭제</button>
+        <button class="memo-editor-btn" onclick="closeMemoEditor()">완료</button>
+      </div>
+    </div>
+    <textarea class="memo-editor-textarea" id="memoEditorTextarea"
+      placeholder="제목&#10;&#10;내용을 입력하세요..."></textarea>
   </div>
 </div>
 
@@ -1523,52 +1601,111 @@ calInit();
 
 // ── Memo ───────────────────────────────────────────────────────────────────
 
-const MEMO_KEY = 'quick_memo';
+const MEMO_LIST_KEY = 'memo_list_v1';
+let memos = loadMemos();
+let currentMemoId = null;
 let memoSaveTimer;
 
-function toggleMemo() {
-  const panel = document.getElementById('memoPanel');
-  const fab   = document.getElementById('memoFab');
-  const isOpen = panel.classList.contains('open');
-  panel.classList.toggle('open', !isOpen);
-  fab.classList.toggle('open', !isOpen);
-  fab.textContent = isOpen ? '📝' : '✕';
-  if (!isOpen) document.getElementById('memoTextarea').focus();
+function loadMemos() {
+  try { return JSON.parse(localStorage.getItem(MEMO_LIST_KEY)) || []; } catch(e) { return []; }
+}
+function saveMemos() {
+  localStorage.setItem(MEMO_LIST_KEY, JSON.stringify(memos));
 }
 
-function initMemo() {
-  const ta = document.getElementById('memoTextarea');
-  ta.value = localStorage.getItem(MEMO_KEY) || '';
-  ta.addEventListener('input', () => {
-    clearTimeout(memoSaveTimer);
-    memoSaveTimer = setTimeout(() => {
-      localStorage.setItem(MEMO_KEY, ta.value);
-      const saved = document.getElementById('memoSaved');
-      saved.classList.add('show');
-      setTimeout(() => saved.classList.remove('show'), 1500);
-    }, 500);
+function getMemoTitle(content) {
+  const first = (content || '').split('\n')[0].trim();
+  return first || '제목 없음';
+}
+function getMemoPreview(content) {
+  const lines = (content || '').split('\n').filter(l => l.trim());
+  return lines.length > 1 ? lines.slice(1).join(' ') : '';
+}
+
+function renderMemoList() {
+  const body = document.getElementById('memoListBody');
+  body.innerHTML = '';
+  if (memos.length === 0) {
+    body.innerHTML = '<div class="memo-empty-msg">메모가 없습니다</div>';
+    return;
+  }
+  [...memos].reverse().forEach(memo => {
+    const item = document.createElement('div');
+    item.className = 'memo-list-item';
+    item.innerHTML = `
+      <span class="memo-list-item-icon">📄</span>
+      <div class="memo-list-item-info">
+        <div class="memo-list-item-title">${escHtml(getMemoTitle(memo.content))}</div>
+        <div class="memo-list-item-preview">${escHtml(getMemoPreview(memo.content))}</div>
+      </div>
+      <button class="memo-list-item-del" onclick="event.stopPropagation();deleteMemoById('${memo.id}')">✕</button>
+    `;
+    item.addEventListener('click', () => openMemoEditor(memo.id));
+    body.appendChild(item);
   });
 }
 
-function clearMemo() {
-  if (!confirm('메모를 전부 지울까요?')) return;
-  document.getElementById('memoTextarea').value = '';
-  localStorage.removeItem(MEMO_KEY);
+function openMemoEditor(id) {
+  if (id === null) {
+    // 새 메모
+    const newMemo = { id: uid(), content: '', updatedAt: Date.now() };
+    memos.push(newMemo);
+    saveMemos();
+    currentMemoId = newMemo.id;
+  } else {
+    currentMemoId = id;
+  }
+  const memo = memos.find(m => m.id === currentMemoId);
+  const ta = document.getElementById('memoEditorTextarea');
+  ta.value = memo.content;
+  const d = new Date(memo.updatedAt);
+  document.getElementById('memoEditorDate').textContent =
+    `${d.getFullYear()}. ${d.getMonth()+1}. ${d.getDate()}`;
+  document.getElementById('memoOverlay').classList.add('open');
+  setTimeout(() => ta.focus(), 100);
+
+  ta.oninput = () => {
+    clearTimeout(memoSaveTimer);
+    memoSaveTimer = setTimeout(() => {
+      const m = memos.find(m => m.id === currentMemoId);
+      if (m) { m.content = ta.value; m.updatedAt = Date.now(); saveMemos(); renderMemoList(); }
+    }, 400);
+  };
 }
 
-initMemo();
+function closeMemoEditor() {
+  // 내용 없으면 자동 삭제
+  const m = memos.find(m => m.id === currentMemoId);
+  if (m && !m.content.trim()) {
+    memos = memos.filter(m => m.id !== currentMemoId);
+    saveMemos();
+  }
+  document.getElementById('memoOverlay').classList.remove('open');
+  currentMemoId = null;
+  renderMemoList();
+}
+
+function deleteMemo() {
+  if (!confirm('이 메모를 삭제할까요?')) return;
+  memos = memos.filter(m => m.id !== currentMemoId);
+  saveMemos();
+  document.getElementById('memoOverlay').classList.remove('open');
+  currentMemoId = null;
+  renderMemoList();
+}
+
+function deleteMemoById(id) {
+  memos = memos.filter(m => m.id !== id);
+  saveMemos();
+  renderMemoList();
+}
+
+function handleOverlayClick(e) {
+  if (e.target === document.getElementById('memoOverlay')) closeMemoEditor();
+}
+
+renderMemoList();
 </script>
-
-<!-- Memo FAB -->
-<button class="memo-fab" id="memoFab" onclick="toggleMemo()">📝</button>
-
-<div class="memo-panel" id="memoPanel">
-  <div class="memo-header">
-    <span class="memo-title">📝 빠른 메모 <span class="memo-saved" id="memoSaved">저장됨</span></span>
-    <button class="memo-clear-btn" onclick="clearMemo()">전체 삭제</button>
-  </div>
-  <textarea class="memo-textarea" id="memoTextarea" placeholder="여기에 메모하세요...&#10;자동으로 저장됩니다."></textarea>
-</div>
 
 </body>
 </html>
