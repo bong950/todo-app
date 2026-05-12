@@ -1251,7 +1251,7 @@ const FIREBASE_CONFIG = {
 };
 
 let db = null;
-let todosRef = null, memosRef = null, eventsRef = null;
+let todosRef = null, memosRef = null, eventsRef = null, commentsRef = null;
 const _fbTimers = {};
 let _applyingRemote = false;
 
@@ -1263,7 +1263,8 @@ try {
   const FB_USER = 'bong950';
   todosRef  = db.doc(`users/${FB_USER}/data/todos`);
   memosRef  = db.doc(`users/${FB_USER}/data/memos`);
-  eventsRef = db.doc(`users/${FB_USER}/data/localEvents`);
+  eventsRef    = db.doc(`users/${FB_USER}/data/localEvents`);
+  commentsRef  = db.doc(`users/${FB_USER}/data/eventComments`);
 } catch(e) { console.warn('Firebase init failed, using localStorage only.', e); }
 
 function fbSave(ref, payload) {
@@ -1276,7 +1277,8 @@ function fbSave(ref, payload) {
     ref.set({ ...payload, updatedAt: ts }).catch(console.error);
     if (ref === todosRef)  localStorage.setItem(STORAGE_KEY + '_ts', ts);
     if (ref === memosRef)  localStorage.setItem(MEMO_LIST_KEY + '_ts', ts);
-    if (ref === eventsRef) localStorage.setItem(LOCAL_EVENTS_KEY + '_ts', ts);
+    if (ref === eventsRef)    localStorage.setItem(LOCAL_EVENTS_KEY + '_ts', ts);
+    if (ref === commentsRef)  localStorage.setItem(EVENT_COMMENTS_KEY + '_ts', ts);
   }, 700);
 }
 
@@ -1955,8 +1957,10 @@ function loadEventComments() {
 }
 
 function saveEventComment(key, text) {
-  eventComments[key] = text;
+  if (text) eventComments[key] = text;
+  else delete eventComments[key];
   localStorage.setItem(EVENT_COMMENTS_KEY, JSON.stringify(eventComments));
+  fbSave(commentsRef, { comments: eventComments });
 }
 
 function makeCommentKey(title, date) {
@@ -2407,6 +2411,26 @@ function setupFirebaseSync() {
       localStorage.setItem(LOCAL_EVENTS_KEY, JSON.stringify(localEvents));
       localStorage.setItem(LOCAL_EVENTS_KEY + '_ts', remoteTime);
       renderCal();
+      renderUpcoming();
+      _applyingRemote = false;
+    }
+  });
+
+  commentsRef.onSnapshot(snap => {
+    if (snap.metadata.hasPendingWrites) return;
+    if (!snap.exists) {
+      if (Object.keys(eventComments).length > 0) fbSave(commentsRef, { comments: eventComments });
+      return;
+    }
+    const remote = snap.data();
+    if (!remote || !remote.comments) return;
+    const remoteTime = remote.updatedAt || 0;
+    const localTime  = parseInt(localStorage.getItem(EVENT_COMMENTS_KEY + '_ts') || '0');
+    if (remoteTime >= localTime) {
+      _applyingRemote = true;
+      eventComments = remote.comments;
+      localStorage.setItem(EVENT_COMMENTS_KEY, JSON.stringify(eventComments));
+      localStorage.setItem(EVENT_COMMENTS_KEY + '_ts', remoteTime);
       renderUpcoming();
       _applyingRemote = false;
     }
