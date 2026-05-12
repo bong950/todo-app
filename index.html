@@ -1045,6 +1045,7 @@
       <span class="memo-editor-date" id="memoEditorDate"></span>
       <div class="memo-editor-actions">
         <button class="memo-editor-btn del" onclick="deleteMemo()">삭제</button>
+        <button class="memo-editor-btn" id="memoCopyBtn" onclick="copyMemo()">복사</button>
         <button class="memo-editor-btn" onclick="closeMemoEditor()">완료</button>
       </div>
     </div>
@@ -1798,6 +1799,16 @@ function openMemoEditor(id) {
       if (m) { m.content = ta.value; m.updatedAt = Date.now(); saveMemos(); renderMemoList(); }
     }, 400);
   };
+}
+
+function copyMemo() {
+  const text = document.getElementById('memoEditorTextarea').value;
+  if (!text.trim()) return;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('memoCopyBtn');
+    btn.textContent = '복사됨 ✓';
+    setTimeout(() => { btn.textContent = '복사'; }, 1500);
+  });
 }
 
 function closeMemoEditor() {
