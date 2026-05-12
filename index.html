@@ -1824,10 +1824,16 @@ function gisLoaded() {
 }
 
 let silentAuthDone = false;
-const GCAL_HINT_KEY = 'gcal_login_hint';
+const GCAL_HINT_KEY  = 'gcal_login_hint';
+const GCAL_SCOPE_KEY = 'gcal_granted_scope';
 
 function getSavedHint() {
   return localStorage.getItem(GCAL_HINT_KEY) || '';
+}
+
+function needsReauth() {
+  const granted = localStorage.getItem(GCAL_SCOPE_KEY) || '';
+  return !granted.includes('calendar.events');
 }
 
 async function saveLoginHint(accessToken) {
@@ -1848,6 +1854,7 @@ function setAuthBtnSynced() {
 }
 
 function trySilentAuth(retryCount = 0) {
+  if (needsReauth()) return; // 새 권한 필요 시 사용자가 직접 버튼 눌러야 함
   tokenClient.callback = async (resp) => {
     if (resp.error) {
       if (retryCount < 3) {
@@ -1875,12 +1882,15 @@ async function handleAuthClick() {
     if (resp.error) { console.error(resp); return; }
     silentAuthDone = true;
     gapi.client.setToken({ access_token: resp.access_token });
+    localStorage.setItem(GCAL_SCOPE_KEY, SCOPES);
     await saveLoginHint(resp.access_token);
     setAuthBtnSynced();
     await fetchCalEvents();
   };
   const hint = getSavedHint();
-  tokenClient.requestAccessToken({ prompt: hint ? '' : 'select_account', ...(hint && { login_hint: hint }) });
+  // 권한이 바뀌었으면 consent 강제, 아니면 자동
+  const prompt = needsReauth() ? 'consent' : (hint ? '' : 'select_account');
+  tokenClient.requestAccessToken({ prompt, ...(hint && { login_hint: hint }) });
 }
 
 async function fetchCalEvents() {
