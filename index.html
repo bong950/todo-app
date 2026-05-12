@@ -1176,26 +1176,11 @@ function gisLoaded() {
   maybeEnable();
 }
 
-const TOKEN_STORAGE_KEY = 'gcal_token';
-
-function saveToken(token) {
-  const expiry = Date.now() + (token.expires_in - 60) * 1000;
-  localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify({ token: token.access_token, expiry }));
-}
-
-function loadSavedToken() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(TOKEN_STORAGE_KEY));
-    if (saved && saved.expiry > Date.now()) return saved.token;
-  } catch(e) {}
-  localStorage.removeItem(TOKEN_STORAGE_KEY);
-  return null;
-}
-
 function setAuthBtnSynced() {
   const btn = document.getElementById('calAuthBtn');
   btn.textContent = '동기화 ✓';
   btn.classList.add('synced');
+  btn.disabled = false;
 }
 
 function maybeEnable() {
@@ -1203,24 +1188,24 @@ function maybeEnable() {
   const btn = document.getElementById('calAuthBtn');
   btn.disabled = false;
 
-  // 저장된 토큰이 있으면 자동 복원
-  const savedToken = loadSavedToken();
-  if (savedToken) {
-    gapi.client.setToken({ access_token: savedToken });
+  // 이전에 허용한 적 있으면 팝업 없이 자동 토큰 발급
+  tokenClient.callback = async (resp) => {
+    if (resp.error) return; // 조용히 실패 (첫 방문 등)
+    gapi.client.setToken({ access_token: resp.access_token });
     setAuthBtnSynced();
-    fetchCalEvents();
-  }
+    await fetchCalEvents();
+  };
+  tokenClient.requestAccessToken({ prompt: 'none' });
 }
 
 async function handleAuthClick() {
   tokenClient.callback = async (resp) => {
     if (resp.error) { console.error(resp); return; }
-    saveToken(resp);
     gapi.client.setToken({ access_token: resp.access_token });
     setAuthBtnSynced();
     await fetchCalEvents();
   };
-  tokenClient.requestAccessToken({ prompt: '' });
+  tokenClient.requestAccessToken({ prompt: 'consent' });
 }
 
 async function fetchCalEvents() {
