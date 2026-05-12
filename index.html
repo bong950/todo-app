@@ -1878,7 +1878,7 @@ async function handleAuthClick() {
     await fetchCalEvents();
   };
   const hint = getSavedHint();
-  tokenClient.requestAccessToken({ prompt: 'consent', ...(hint && { login_hint: hint }) });
+  tokenClient.requestAccessToken({ prompt: hint ? '' : 'select_account', ...(hint && { login_hint: hint }) });
 }
 
 async function fetchCalEvents() {
