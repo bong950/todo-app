@@ -437,8 +437,41 @@
     text-align: center;
   }
 
+  /* 모바일 탭 네비게이션 */
+  .mobile-tabs {
+    display: none;
+  }
   @media (max-width: 800px) {
-    body { padding: 0 0 100px; -webkit-tap-highlight-color: transparent; }
+    .mobile-tabs {
+      display: flex;
+      position: sticky;
+      top: 48px;
+      z-index: 90;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .mobile-tab {
+      flex: 1;
+      padding: 11px 0;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all var(--transition);
+      font-family: inherit;
+      background: transparent;
+      border-top: none;
+      border-left: none;
+      border-right: none;
+    }
+    .mobile-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    body { padding: 0 0 40px; -webkit-tap-highlight-color: transparent; }
 
     .header { height: 48px; padding: 0 16px; }
     .header-title { font-size: 14px; }
@@ -446,48 +479,69 @@
 
     .page {
       flex-direction: column;
-      padding: 20px 12px 24px;
+      padding: 16px 12px 24px;
       gap: 16px;
     }
 
-    .page-title { font-size: 24px; margin-bottom: 18px; }
-
-    .calendar-col { width: 100%; position: static; }
-
-    /* 달력 터치 최적화 */
-    .cal-day {
-      aspect-ratio: 1;
-      font-size: 14px;
-      min-height: 38px;
+    .todo-col, .calendar-col {
+      width: 100%;
     }
+    .calendar-col { position: static; }
+
+    /* 탭으로 전환 */
+    .todo-col.hidden, .calendar-col.hidden { display: none; }
+
+    .page-title { font-size: 22px; margin-bottom: 16px; }
+
+    /* 달력 */
+    .cal-day { aspect-ratio: 1; font-size: 14px; min-height: 40px; }
     .cal-header { padding: 12px 14px; }
     .cal-month-label { font-size: 14px; }
-    .cal-nav-btn { width: 32px; height: 32px; font-size: 18px; }
-    .cal-auth-btn { font-size: 12px; padding: 5px 10px; }
-    .cal-today-btn { font-size: 12px; padding: 4px 10px; }
+    .cal-nav-btn { width: 34px; height: 34px; font-size: 18px; }
     .cal-grid { padding: 10px 10px 14px; }
 
-    /* 할일 아이템 터치 영역 확대 */
-    .todo-item { padding: 9px 12px 9px 10px; }
+    /* 구글 연동 버튼 모바일에서 크게 */
+    .cal-auth-btn {
+      font-size: 12px; padding: 6px 12px;
+    }
+    .cal-auth-btn:not(.synced) {
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(66,133,244,0.4); }
+      50%       { box-shadow: 0 0 0 6px rgba(66,133,244,0); }
+    }
+    .cal-today-btn { font-size: 12px; padding: 5px 10px; }
+
+    /* 할일 */
+    .todo-item { padding: 10px 12px 10px 10px; }
     .todo-item.sub { padding-left: 36px; }
     .item-actions { opacity: 1; }
-    .item-btn { padding: 5px 7px; }
-    .check-wrap { width: 18px; height: 18px; margin-top: 1px; }
+    .item-btn { padding: 6px 8px; font-size: 13px; }
+    .check-wrap { width: 18px; height: 18px; margin-top: 2px; }
+    .item-text { font-size: 14px; }
 
-    /* 섹션 헤더 */
+    /* 섹션 */
     .section-header { padding: 14px 12px; }
     .section-name { font-size: 14px; }
     .section-del-btn { opacity: 1; }
 
-    /* 추가 입력 */
+    /* 입력 */
     .add-item-row { padding: 8px 12px 12px 10px; }
-    .add-item-input { font-size: 14px; }
-    .add-section-btn { font-size: 13px; padding: 9px 14px; }
+    .add-item-input { font-size: 15px; }
+    .add-section-btn { font-size: 13px; padding: 10px 16px; width: 100%; justify-content: center; }
 
     /* 다가오는 일정 */
     .upcoming-item { padding: 10px 14px; }
-    .upcoming-title { font-size: 13.5px; }
+    .upcoming-title { font-size: 13.5px; white-space: normal; }
     .upcoming-header { padding: 13px 16px; }
+
+    /* 메모 */
+    .memo-list-card { margin-top: 12px; }
+
+    /* 모달 */
+    .local-event-modal { max-width: 100%; }
+    .memo-editor { max-width: 100%; }
   }
 
   /* iPhone SE 등 작은 화면 */
@@ -1044,15 +1098,20 @@
   <span class="header-date" id="headerDate"></span>
 </header>
 
+<nav class="mobile-tabs">
+  <button class="mobile-tab active" onclick="switchTab('todo')">📝 할 일</button>
+  <button class="mobile-tab" onclick="switchTab('calendar')">📅 달력</button>
+</nav>
+
 <div class="page">
-  <div class="todo-col">
+  <div class="todo-col" id="todoCol">
     <h1 class="page-title">나의 할 일</h1>
     <div id="sectionList"></div>
     <button class="add-section-btn" onclick="addSection()">
       <span style="font-size:15px;line-height:1">+</span> 새 섹션 추가
     </button>
   </div>
-  <div class="calendar-col">
+  <div class="calendar-col" id="calendarCol">
     <div class="calendar-card">
       <div class="cal-header">
         <span class="cal-month-label" id="calMonthLabel"></span>
@@ -1910,6 +1969,24 @@ function renderCal() {
 }
 
 calInit();
+
+// ── Mobile Tab ─────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  const todoCol = document.getElementById('todoCol');
+  const calCol  = document.getElementById('calendarCol');
+  const tabs    = document.querySelectorAll('.mobile-tab');
+  if (tab === 'todo') {
+    todoCol.classList.remove('hidden');
+    calCol.classList.add('hidden');
+    tabs[0].classList.add('active');
+    tabs[1].classList.remove('active');
+  } else {
+    todoCol.classList.add('hidden');
+    calCol.classList.remove('hidden');
+    tabs[0].classList.remove('active');
+    tabs[1].classList.add('active');
+  }
+}
 
 // ── Memo ───────────────────────────────────────────────────────────────────
 
