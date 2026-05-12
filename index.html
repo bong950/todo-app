@@ -1176,25 +1176,51 @@ function gisLoaded() {
   maybeEnable();
 }
 
+const TOKEN_STORAGE_KEY = 'gcal_token';
+
+function saveToken(token) {
+  const expiry = Date.now() + (token.expires_in - 60) * 1000;
+  localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify({ token: token.access_token, expiry }));
+}
+
+function loadSavedToken() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(TOKEN_STORAGE_KEY));
+    if (saved && saved.expiry > Date.now()) return saved.token;
+  } catch(e) {}
+  localStorage.removeItem(TOKEN_STORAGE_KEY);
+  return null;
+}
+
+function setAuthBtnSynced() {
+  const btn = document.getElementById('calAuthBtn');
+  btn.textContent = '동기화 ✓';
+  btn.classList.add('synced');
+}
+
 function maybeEnable() {
-  if (gapiInited && gisInited) {
-    document.getElementById('calAuthBtn').disabled = false;
+  if (!gapiInited || !gisInited) return;
+  const btn = document.getElementById('calAuthBtn');
+  btn.disabled = false;
+
+  // 저장된 토큰이 있으면 자동 복원
+  const savedToken = loadSavedToken();
+  if (savedToken) {
+    gapi.client.setToken({ access_token: savedToken });
+    setAuthBtnSynced();
+    fetchCalEvents();
   }
 }
 
 async function handleAuthClick() {
   tokenClient.callback = async (resp) => {
     if (resp.error) { console.error(resp); return; }
-    const btn = document.getElementById('calAuthBtn');
-    btn.textContent = '동기화 ✓';
-    btn.classList.add('synced');
+    saveToken(resp);
+    gapi.client.setToken({ access_token: resp.access_token });
+    setAuthBtnSynced();
     await fetchCalEvents();
   };
-  if (gapi.client.getToken() === null) {
-    tokenClient.requestAccessToken({ prompt: 'consent' });
-  } else {
-    await fetchCalEvents();
-  }
+  tokenClient.requestAccessToken({ prompt: '' });
 }
 
 async function fetchCalEvents() {
