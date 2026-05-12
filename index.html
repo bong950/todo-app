@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>할 일 관리</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f7f6f3;
+    --surface: #ffffff;
+    --border: #e8e6e1;
+    --border-hover: #d0cdc5;
+    --text-primary: #37352f;
+    --text-secondary: #9b9589;
+    --text-done: #b5b1ab;
+    --accent: #2383e2;
+    --accent-light: #e8f1fb;
+    --accent-hover: #0f73d9;
+    --check-bg: #2383e2;
+    --check-border: #ccc8c3;
+    --danger: #e03e3e;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.08);
+    --radius: 6px;
+    --radius-lg: 10px;
+    --transition: 0.18s ease;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Noto Sans KR', 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    min-height: 100vh;
+    padding: 0 0 80px;
+  }
+
+  /* ── Header ── */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: var(--shadow-sm);
+  }
+  .header-icon {
+    font-size: 20px;
+    line-height: 1;
+  }
+  .header-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+  }
+  .header-date {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 300;
+  }
+
+  /* ── Page ── */
+  .page {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 40px 24px 24px;
+  }
+
+  .page-title {
+    font-size: 32px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.03em;
+    margin-bottom: 28px;
+    line-height: 1.2;
+  }
+
+  /* ── Add Section ── */
+  .add-section-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    background: transparent;
+    border: 1.5px dashed var(--border-hover);
+    border-radius: var(--radius);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all var(--transition);
+    margin-top: 8px;
+  }
+  .add-section-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-light);
+  }
+
+  /* ── Section ── */
+  .section {
+    margin-bottom: 16px;
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    transition: box-shadow var(--transition);
+  }
+  .section:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 16px 14px 12px;
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid transparent;
+    transition: background var(--transition), border-color var(--transition);
+  }
+  .section-header:hover {
+    background: var(--bg);
+  }
+  .section.open .section-header {
+    border-bottom-color: var(--border);
+  }
+
+  .toggle-arrow {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+  }
+  .toggle-arrow svg {
+    width: 14px;
+    height: 14px;
+  }
+  .section.open .toggle-arrow {
+    transform: rotate(90deg);
+  }
+
+  .section-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    flex: 1;
+    outline: none;
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    cursor: text;
+    min-width: 0;
+  }
+  .section-name:focus {
+    color: var(--accent);
+  }
+
+  .section-count {
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: var(--bg);
+    border-radius: 10px;
+    padding: 2px 8px;
+    font-weight: 400;
+    border: 1px solid var(--border);
+  }
+
+  .section-del-btn {
+    opacity: 0;
+    background: transparent;
+    border: none;
+    padding: 3px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: all var(--transition);
+    font-size: 12px;
+  }
+  .section-header:hover .section-del-btn {
+    opacity: 1;
+  }
+  .section-del-btn:hover {
+    background: #fff0f0;
+    color: var(--danger);
+  }
+
+  /* ── Items ── */
+  .items-list {
+    padding: 6px 0;
+    display: none;
+  }
+  .section.open .items-list {
+    display: block;
+  }
+
+  .todo-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 7px 16px 7px 14px;
+    position: relative;
+    transition: background var(--transition);
+    animation: fadeIn 0.22s ease;
+  }
+  .todo-item:hover {
+    background: var(--bg);
+  }
+  .todo-item.sub {
+    padding-left: 42px;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes slideDown {
+    from { opacity: 0.7; transform: translateY(-6px); }
+    to   { opacity: 1;   transform: translateY(0); }
+  }
+  @keyframes slideUp {
+    from { opacity: 0.7; transform: translateY(6px); }
+    to   { opacity: 1;   transform: translateY(0); }
+  }
+  .todo-item.animate-down { animation: slideDown 0.25s ease; }
+  .todo-item.animate-up   { animation: slideUp 0.25s ease; }
+
+  /* Checkbox */
+  .check-wrap {
+    position: relative;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .check-wrap input[type="checkbox"] {
+    opacity: 0;
+    position: absolute;
+    inset: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    z-index: 2;
+  }
+  .check-box {
+    position: absolute;
+    inset: 0;
+    border: 1.5px solid var(--check-border);
+    border-radius: 3px;
+    background: #fff;
+    transition: all 0.15s ease;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .check-box svg {
+    opacity: 0;
+    transform: scale(0.6);
+    transition: all 0.15s ease;
+  }
+  .check-wrap input:checked ~ .check-box {
+    background: var(--check-bg);
+    border-color: var(--check-bg);
+  }
+  .check-wrap input:checked ~ .check-box svg {
+    opacity: 1;
+    transform: scale(1);
+  }
+  .check-wrap:hover .check-box {
+    border-color: var(--accent);
+  }
+
+  /* Item text */
+  .item-text {
+    flex: 1;
+    font-size: 14px;
+    color: var(--text-primary);
+    line-height: 1.5;
+    outline: none;
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    resize: none;
+    min-width: 0;
+    word-break: break-word;
+    transition: color var(--transition);
+  }
+  .item-text:focus {
+    color: var(--text-primary);
+  }
+  .todo-item.done .item-text {
+    color: var(--text-done);
+    text-decoration: line-through;
+    text-decoration-color: var(--text-done);
+  }
+
+  /* Link badge */
+  .item-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11.5px;
+    color: var(--accent);
+    text-decoration: none;
+    background: var(--accent-light);
+    border-radius: 4px;
+    padding: 1px 7px 1px 5px;
+    margin-top: 3px;
+    width: fit-content;
+    transition: background var(--transition);
+    word-break: break-all;
+  }
+  .item-link:hover {
+    background: #d0e6fa;
+    text-decoration: underline;
+  }
+
+  /* Item actions */
+  .item-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity var(--transition);
+    flex-shrink: 0;
+  }
+  .todo-item:hover .item-actions {
+    opacity: 1;
+  }
+  .item-btn {
+    background: transparent;
+    border: none;
+    padding: 3px 5px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-family: inherit;
+    transition: all var(--transition);
+    line-height: 1;
+  }
+  .item-btn:hover {
+    background: var(--bg);
+    color: var(--text-primary);
+  }
+  .item-btn.del:hover {
+    background: #fff0f0;
+    color: var(--danger);
+  }
+  .item-btn.sub-btn:hover {
+    background: var(--accent-light);
+    color: var(--accent);
+  }
+
+  /* ── Add item row ── */
+  .add-item-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 16px 10px 14px;
+  }
+  .add-item-icon {
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+    margin-top: 1px;
+    font-size: 16px;
+    line-height: 1;
+  }
+  .add-item-input {
+    flex: 1;
+    font-size: 13.5px;
+    color: var(--text-secondary);
+    border: none;
+    outline: none;
+    background: transparent;
+    font-family: inherit;
+  }
+  .add-item-input::placeholder {
+    color: #c5c1bb;
+  }
+  .add-item-input:focus {
+    color: var(--text-primary);
+  }
+
+  /* ── Divider between pending/done ── */
+  .done-divider {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 16px;
+    margin: 2px 0;
+  }
+  .done-divider-line {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  .done-divider-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    font-weight: 400;
+  }
+
+  /* ── Progress bar ── */
+  .section-progress {
+    height: 2px;
+    background: var(--border);
+    overflow: hidden;
+  }
+  .section-progress-bar {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.35s ease;
+    border-radius: 1px;
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #ddd9d3; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <span class="header-icon">📋</span>
+  <span class="header-title">할 일 관리</span>
+  <span class="header-date" id="headerDate"></span>
+</header>
+
+<div class="page">
+  <h1 class="page-title">나의 할 일</h1>
+  <div id="sectionList"></div>
+  <button class="add-section-btn" onclick="addSection()">
+    <span style="font-size:15px;line-height:1">+</span> 새 섹션 추가
+  </button>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+
+const STORAGE_KEY = 'todo_data_v2';
+
+let data = loadData();
+
+function defaultData() {
+  return {
+    sections: [
+      {
+        id: uid(),
+        name: '투두',
+        open: true,
+        items: [
+          { id: uid(), text: '할 일', done: false, sub: false, link: '' },
+          { id: uid(), text: '중국 여행 일정 다듬기 (10일 끝내기)', done: false, sub: false, link: '' },
+          { id: uid(), text: '뉴뉴 회사소개서 보고 과제 연습해보기', done: false, sub: false, link: '' },
+          { id: uid(), text: '7 20 동인내 가기', done: true, sub: false, link: '' },
+          { id: uid(), text: '계란 사기, 종량제 20ℓ사기', done: true, sub: false, link: '' },
+          { id: uid(), text: '샴푸 바디워시', done: true, sub: false, link: '' },
+          { id: uid(), text: '판매할 책 정리하기', done: true, sub: false, link: '' },
+          { id: uid(), text: '조리퐁, 오예스, 약과 (곧에 보낼꺼)', done: true, sub: false, link: 'https://blog.naver.com' },
+        ]
+      },
+      {
+        id: uid(),
+        name: '단기',
+        open: true,
+        items: []
+      },
+      {
+        id: uid(),
+        name: '장기',
+        open: true,
+        items: []
+      }
+    ]
+  };
+}
+
+function loadData() {
+  try {
+    const s = localStorage.getItem(STORAGE_KEY);
+    if (s) {
+      const parsed = JSON.parse(s);
+      const names = parsed.sections.map(sec => sec.name);
+      if (!names.includes('단기')) {
+        parsed.sections.push({ id: uid(), name: '단기', open: true, items: [] });
+      }
+      if (!names.includes('장기')) {
+        parsed.sections.push({ id: uid(), name: '장기', open: true, items: [] });
+      }
+      return parsed;
+    }
+  } catch(e) {}
+  return defaultData();
+}
+
+function saveData() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+function uid() {
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
+// ── Rendering ──────────────────────────────────────────────────────────────
+
+function render() {
+  const list = document.getElementById('sectionList');
+  list.innerHTML = '';
+  data.sections.forEach(sec => {
+    list.appendChild(buildSection(sec));
+  });
+  saveData();
+}
+
+function buildSection(sec) {
+  const sorted = sortItems(sec.items);
+  const pending = sorted.filter(i => !i.done);
+  const done    = sorted.filter(i =>  i.done);
+  const total   = sec.items.length;
+  const doneCount = done.length;
+  const pct = total ? Math.round(doneCount / total * 100) : 0;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'section' + (sec.open ? ' open' : '');
+  wrap.dataset.id = sec.id;
+
+  // Header
+  const hdr = document.createElement('div');
+  hdr.className = 'section-header';
+  hdr.innerHTML = `
+    <span class="toggle-arrow">
+      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="4,2 10,7 4,12"/>
+      </svg>
+    </span>
+    <input class="section-name" type="text" value="${escHtml(sec.name)}" placeholder="섹션 이름" />
+    <span class="section-count">${pending.length}/${total}</span>
+    <button class="section-del-btn" title="섹션 삭제">✕</button>
+  `;
+  hdr.querySelector('.toggle-arrow').addEventListener('click', e => {
+    e.stopPropagation();
+    sec.open = !sec.open;
+    saveData();
+    wrap.classList.toggle('open', sec.open);
+  });
+  hdr.querySelector('.section-name').addEventListener('change', e => {
+    sec.name = e.target.value;
+    saveData();
+  });
+  hdr.querySelector('.section-name').addEventListener('click', e => e.stopPropagation());
+  hdr.querySelector('.section-del-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    if (sec.items.length === 0 || confirm(`"${sec.name}" 섹션을 삭제할까요?`)) {
+      data.sections = data.sections.filter(s => s.id !== sec.id);
+      render();
+    }
+  });
+  wrap.appendChild(hdr);
+
+  // Progress
+  const prog = document.createElement('div');
+  prog.className = 'section-progress';
+  prog.innerHTML = `<div class="section-progress-bar" style="width:${pct}%"></div>`;
+  wrap.appendChild(prog);
+
+  // Items list
+  const ul = document.createElement('div');
+  ul.className = 'items-list';
+
+  pending.forEach(item => ul.appendChild(buildItem(item, sec)));
+
+  if (pending.length > 0 && done.length > 0) {
+    const div = document.createElement('div');
+    div.className = 'done-divider';
+    div.innerHTML = `<div class="done-divider-line"></div><span class="done-divider-label">완료 ${done.length}개</span><div class="done-divider-line"></div>`;
+    ul.appendChild(div);
+  }
+
+  done.forEach(item => ul.appendChild(buildItem(item, sec)));
+
+  // Add row
+  const addRow = document.createElement('div');
+  addRow.className = 'add-item-row';
+  addRow.innerHTML = `
+    <span class="add-item-icon" style="color:#c5c1bb">+</span>
+    <input class="add-item-input" type="text" placeholder="할 일 추가..." />
+  `;
+  addRow.querySelector('.add-item-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      const val = e.target.value.trim();
+      if (val) {
+        sec.items.push({ id: uid(), text: val, done: false, sub: false, link: '' });
+        render();
+        // Re-focus after render
+        setTimeout(() => {
+          const secEl = document.querySelector(`[data-id="${sec.id}"]`);
+          if (secEl) secEl.querySelector('.add-item-input').focus();
+        }, 30);
+      }
+    }
+  });
+  ul.appendChild(addRow);
+
+  wrap.appendChild(ul);
+  return wrap;
+}
+
+function buildItem(item, sec) {
+  const row = document.createElement('div');
+  row.className = 'todo-item' + (item.done ? ' done' : '') + (item.sub ? ' sub' : '');
+  row.dataset.id = item.id;
+
+  row.innerHTML = `
+    <label class="check-wrap">
+      <input type="checkbox" ${item.done ? 'checked' : ''} />
+      <span class="check-box">
+        <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+          <polyline points="1,4 4,7 9,1" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+    </label>
+    <div style="flex:1;min-width:0">
+      <div class="item-text" contenteditable="true" spellcheck="false">${escHtml(item.text)}</div>
+      ${item.link ? `<a class="item-link" href="${escHtml(item.link)}" target="_blank" rel="noopener">
+        <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 2h3v3M10 2L5 7M4.5 3H2a1 1 0 00-1 1v6a1 1 0 001 1h6a1 1 0 001-1V7.5"/></svg>
+        ${escHtml(item.link.replace(/^https?:\/\//, '').split('/')[0])}
+      </a>` : ''}
+    </div>
+    <div class="item-actions">
+      <button class="item-btn sub-btn" title="들여쓰기">⇥</button>
+      <button class="item-btn link-btn" title="링크 추가">🔗</button>
+      <button class="item-btn del" title="삭제">✕</button>
+    </div>
+  `;
+
+  // Checkbox
+  row.querySelector('input[type=checkbox]').addEventListener('change', e => {
+    item.done = e.target.checked;
+    row.classList.toggle('done', item.done);
+    // animate then re-render
+    row.classList.add(item.done ? 'animate-down' : 'animate-up');
+    setTimeout(() => render(), 280);
+  });
+
+  // Editable text
+  const textEl = row.querySelector('.item-text');
+  textEl.addEventListener('blur', () => {
+    item.text = textEl.innerText.trim();
+    saveData();
+  });
+  textEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); textEl.blur(); }
+    if (e.key === 'Escape') { textEl.innerText = item.text; textEl.blur(); }
+  });
+
+  // Sub-item toggle
+  row.querySelector('.sub-btn').addEventListener('click', () => {
+    item.sub = !item.sub;
+    render();
+  });
+
+  // Link button
+  row.querySelector('.link-btn').addEventListener('click', () => {
+    const url = prompt('링크를 입력하세요:', item.link || 'https://');
+    if (url !== null) {
+      item.link = url.trim();
+      render();
+    }
+  });
+
+  // Delete
+  row.querySelector('.item-btn.del').addEventListener('click', () => {
+    sec.items = sec.items.filter(i => i.id !== item.id);
+    render();
+  });
+
+  return row;
+}
+
+function sortItems(items) {
+  const pending = items.filter(i => !i.done);
+  const done    = items.filter(i =>  i.done);
+  return [...pending, ...done];
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// ── Add section ────────────────────────────────────────────────────────────
+
+function addSection() {
+  const name = prompt('새 섹션 이름을 입력하세요:', '새 섹션');
+  if (name === null) return;
+  data.sections.push({
+    id: uid(),
+    name: name.trim() || '새 섹션',
+    open: true,
+    items: []
+  });
+  render();
+}
+
+// ── Date ───────────────────────────────────────────────────────────────────
+
+function updateDate() {
+  const d = new Date();
+  const days = ['일','월','화','수','목','금','토'];
+  document.getElementById('headerDate').textContent =
+    `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${days[d.getDay()]})`;
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+
+updateDate();
+render();
+</script>
+</body>
+</html>
