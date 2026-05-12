@@ -1484,6 +1484,7 @@ function gisLoaded() {
 }
 
 const GCAL_EMAIL = 'bongsu95@gmail.com';
+let silentAuthDone = false;
 
 function setAuthBtnSynced() {
   const btn = document.getElementById('calAuthBtn');
@@ -1492,13 +1493,16 @@ function setAuthBtnSynced() {
   btn.disabled = false;
 }
 
-function maybeEnable() {
-  if (!gapiInited || !gisInited) return;
-  document.getElementById('calAuthBtn').disabled = false;
-
-  // 항상 지정된 계정으로 팝업 없이 자동 시도
+function trySilentAuth(retryCount = 0) {
   tokenClient.callback = async (resp) => {
-    if (resp.error) return; // 세션 없으면 조용히 실패 → 버튼 클릭 대기
+    if (resp.error) {
+      // 실패 시 최대 3번까지 재시도 (간격: 1s, 2s, 3s)
+      if (retryCount < 3) {
+        setTimeout(() => trySilentAuth(retryCount + 1), (retryCount + 1) * 1000);
+      }
+      return;
+    }
+    silentAuthDone = true;
     gapi.client.setToken({ access_token: resp.access_token });
     setAuthBtnSynced();
     await fetchCalEvents();
@@ -1506,9 +1510,16 @@ function maybeEnable() {
   tokenClient.requestAccessToken({ prompt: 'none', login_hint: GCAL_EMAIL });
 }
 
+function maybeEnable() {
+  if (!gapiInited || !gisInited) return;
+  document.getElementById('calAuthBtn').disabled = false;
+  if (!silentAuthDone) trySilentAuth();
+}
+
 async function handleAuthClick() {
   tokenClient.callback = async (resp) => {
     if (resp.error) { console.error(resp); return; }
+    silentAuthDone = true;
     gapi.client.setToken({ access_token: resp.access_token });
     setAuthBtnSynced();
     await fetchCalEvents();
