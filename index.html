@@ -905,6 +905,11 @@
     gap: 8px;
     padding: 4px 16px;
     margin: 2px 0;
+    cursor: pointer;
+    user-select: none;
+  }
+  .done-divider:hover .done-divider-label {
+    color: var(--text-primary);
   }
   .done-divider-line {
     flex: 1;
@@ -916,6 +921,20 @@
     color: var(--text-secondary);
     white-space: nowrap;
     font-weight: 400;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: color var(--transition);
+  }
+  .done-toggle-arrow {
+    display: inline-block;
+    font-size: 9px;
+    transition: transform 0.2s ease;
+    transform: rotate(0deg);
+    color: var(--text-secondary);
+  }
+  .done-toggle-arrow.open {
+    transform: rotate(90deg);
   }
 
   /* ── Progress bar ── */
@@ -1321,9 +1340,48 @@ function defaultData() {
         name: '장기',
         open: true,
         items: []
+      },
+      {
+        id: uid(),
+        name: '완료',
+        open: true,
+        _system: true,
+        items: []
       }
     ]
   };
+}
+
+function migrateSections(sections) {
+  const names = sections.map(s => s.name);
+  if (!names.includes('단기')) sections.push({ id: uid(), name: '단기', open: true, items: [] });
+  if (!names.includes('장기')) sections.push({ id: uid(), name: '장기', open: true, items: [] });
+
+  // 완료 섹션 확보: _system 없으면 이름으로 찾거나 새로 생성
+  let doneSec = sections.find(s => s._system);
+  if (!doneSec) {
+    doneSec = sections.find(s => s.name === '완료');
+    if (doneSec) {
+      doneSec._system = true;
+    } else {
+      doneSec = { id: uid(), name: '완료', open: true, _system: true, items: [] };
+      sections.push(doneSec);
+    }
+  }
+
+  // 기존 done 항목을 완료 섹션으로 이동 (기존 데이터 마이그레이션)
+  sections.forEach(sec => {
+    if (sec._system) return;
+    const doneItems = sec.items.filter(i => i.done);
+    if (doneItems.length === 0) return;
+    sec.items = sec.items.filter(i => !i.done);
+    doneItems.forEach(item => {
+      if (!item.originSecId) item.originSecId = sec.id;
+      if (!doneSec.items.find(i => i.id === item.id)) doneSec.items.push(item);
+    });
+  });
+
+  return sections;
 }
 
 function loadData() {
@@ -1331,13 +1389,7 @@ function loadData() {
     const s = localStorage.getItem(STORAGE_KEY);
     if (s) {
       const parsed = JSON.parse(s);
-      const names = parsed.sections.map(sec => sec.name);
-      if (!names.includes('단기')) {
-        parsed.sections.push({ id: uid(), name: '단기', open: true, items: [] });
-      }
-      if (!names.includes('장기')) {
-        parsed.sections.push({ id: uid(), name: '장기', open: true, items: [] });
-      }
+      migrateSections(parsed.sections);
       return parsed;
     }
   } catch(e) {}
@@ -1347,6 +1399,7 @@ function loadData() {
 function saveData(addHistory = false) {
   if (addHistory) pushHistory();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  localStorage.setItem(STORAGE_KEY + '_ts', Date.now());
   fbSave(todosRef, { sections: data.sections });
 }
 
@@ -1357,6 +1410,12 @@ function uid() {
 // ── Rendering ──────────────────────────────────────────────────────────────
 
 function render() {
+  // 완료 섹션은 항상 맨 마지막
+  const sysIdx = data.sections.findIndex(s => s._system);
+  if (sysIdx !== -1 && sysIdx !== data.sections.length - 1) {
+    const [sys] = data.sections.splice(sysIdx, 1);
+    data.sections.push(sys);
+  }
   const list = document.getElementById('sectionList');
   list.innerHTML = '';
   data.sections.forEach(sec => {
@@ -1380,34 +1439,46 @@ function buildSection(sec) {
   // Header
   const hdr = document.createElement('div');
   hdr.className = 'section-header';
-  hdr.innerHTML = `
-    <span class="toggle-arrow">
-      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="4,2 10,7 4,12"/>
-      </svg>
-    </span>
-    <input class="section-name" type="text" value="${escHtml(sec.name)}" placeholder="섹션 이름" />
-    <span class="section-count">${pending.length}/${total}</span>
-    <button class="section-del-btn" title="섹션 삭제">✕</button>
-  `;
+  if (sec._system) {
+    hdr.innerHTML = `
+      <span class="toggle-arrow">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="4,2 10,7 4,12"/>
+        </svg>
+      </span>
+      <span class="section-name" style="cursor:default;color:var(--text-secondary)">✓ ${escHtml(sec.name)}</span>
+      <span class="section-count">${total}</span>
+    `;
+  } else {
+    hdr.innerHTML = `
+      <span class="toggle-arrow">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="4,2 10,7 4,12"/>
+        </svg>
+      </span>
+      <input class="section-name" type="text" value="${escHtml(sec.name)}" placeholder="섹션 이름" />
+      <span class="section-count">${pending.length}/${total}</span>
+      <button class="section-del-btn" title="섹션 삭제">✕</button>
+    `;
+    hdr.querySelector('.section-name').addEventListener('change', e => {
+      sec.name = e.target.value;
+      saveData();
+    });
+    hdr.querySelector('.section-name').addEventListener('click', e => e.stopPropagation());
+    hdr.querySelector('.section-del-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      if (sec.items.length === 0 || confirm(`"${sec.name}" 섹션을 삭제할까요?`)) {
+        pushHistory();
+        data.sections = data.sections.filter(s => s.id !== sec.id);
+        render();
+      }
+    });
+  }
   hdr.querySelector('.toggle-arrow').addEventListener('click', e => {
     e.stopPropagation();
     sec.open = !sec.open;
     saveData();
     wrap.classList.toggle('open', sec.open);
-  });
-  hdr.querySelector('.section-name').addEventListener('change', e => {
-    sec.name = e.target.value;
-    saveData();
-  });
-  hdr.querySelector('.section-name').addEventListener('click', e => e.stopPropagation());
-  hdr.querySelector('.section-del-btn').addEventListener('click', e => {
-    e.stopPropagation();
-    if (sec.items.length === 0 || confirm(`"${sec.name}" 섹션을 삭제할까요?`)) {
-      pushHistory();
-      data.sections = data.sections.filter(s => s.id !== sec.id);
-      render();
-    }
   });
   wrap.appendChild(hdr);
 
@@ -1442,40 +1513,58 @@ function buildSection(sec) {
     }
   });
 
-  pending.forEach(item => ul.appendChild(buildItem(item, sec)));
+  if (sec._system) {
+    // 완료 섹션: 모든 항목 그대로 표시, 입력창 없음
+    sec.items.forEach(item => ul.appendChild(buildItem(item, sec)));
+  } else {
+    pending.forEach(item => ul.appendChild(buildItem(item, sec)));
 
-  if (pending.length > 0 && done.length > 0) {
-    const div = document.createElement('div');
-    div.className = 'done-divider';
-    div.innerHTML = `<div class="done-divider-line"></div><span class="done-divider-label">완료 ${done.length}개</span><div class="done-divider-line"></div>`;
-    ul.appendChild(div);
-  }
-
-  done.forEach(item => ul.appendChild(buildItem(item, sec)));
-
-  // Add row
-  const addRow = document.createElement('div');
-  addRow.className = 'add-item-row';
-  addRow.innerHTML = `
-    <span class="add-item-icon" style="color:#c5c1bb">+</span>
-    <input class="add-item-input" type="text" placeholder="할 일 추가..." />
-  `;
-  addRow.querySelector('.add-item-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-      const val = e.target.value.trim();
-      if (val) {
-        pushHistory();
-        sec.items.push({ id: uid(), text: val, done: false, sub: false, link: '' });
+    if (done.length > 0) {
+      if (sec.doneOpen === undefined) sec.doneOpen = true;
+      const div = document.createElement('div');
+      div.className = 'done-divider';
+      div.innerHTML = `
+        <div class="done-divider-line"></div>
+        <span class="done-divider-label">
+          <span class="done-toggle-arrow ${sec.doneOpen ? 'open' : ''}">▶</span>
+          완료 ${done.length}개
+        </span>
+        <div class="done-divider-line"></div>
+      `;
+      div.addEventListener('click', () => {
+        sec.doneOpen = !sec.doneOpen;
+        saveData();
         render();
-        // Re-focus after render
-        setTimeout(() => {
-          const secEl = document.querySelector(`[data-id="${sec.id}"]`);
-          if (secEl) secEl.querySelector('.add-item-input').focus();
-        }, 30);
+      });
+      ul.appendChild(div);
+      if (sec.doneOpen) {
+        done.forEach(item => ul.appendChild(buildItem(item, sec)));
       }
     }
-  });
-  ul.appendChild(addRow);
+
+    // Add row
+    const addRow = document.createElement('div');
+    addRow.className = 'add-item-row';
+    addRow.innerHTML = `
+      <span class="add-item-icon" style="color:#c5c1bb">+</span>
+      <input class="add-item-input" type="text" placeholder="할 일 추가..." />
+    `;
+    addRow.querySelector('.add-item-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        const val = e.target.value.trim();
+        if (val) {
+          pushHistory();
+          sec.items.push({ id: uid(), text: val, done: false, sub: false, link: '' });
+          render();
+          setTimeout(() => {
+            const secEl = document.querySelector(`[data-id="${sec.id}"]`);
+            if (secEl) secEl.querySelector('.add-item-input').focus();
+          }, 30);
+        }
+      }
+    });
+    ul.appendChild(addRow);
+  }
 
   wrap.appendChild(ul);
   return wrap;
@@ -1552,8 +1641,31 @@ function buildItem(item, sec) {
   row.querySelector('input[type=checkbox]').addEventListener('change', e => {
     pushHistory();
     item.done = e.target.checked;
+
+    // onSnapshot이 340ms 사이에 끼어들 수 있으므로 즉시 이동 후 saveData로 localTime 확보
+    const doneSec = data.sections.find(s => s._system) || data.sections.find(s => s.name === '완료');
+    if (item.done) {
+      const curSec = data.sections.find(s => s.id === sec.id) || sec;
+      if (doneSec && curSec.id !== doneSec.id) {
+        curSec.items = curSec.items.filter(i => i.id !== item.id);
+        if (!item.originSecId) item.originSecId = curSec.id;
+        if (!doneSec.items.find(i => i.id === item.id)) doneSec.items.unshift(item);
+      }
+    } else {
+      const curSec = data.sections.find(s => s.id === sec.id) || sec;
+      if (curSec._system) {
+        const origin = data.sections.find(s => s.id === item.originSecId && !s._system)
+                    || data.sections.find(s => !s._system);
+        if (origin) {
+          curSec.items = curSec.items.filter(i => i.id !== item.id);
+          delete item.originSecId;
+          origin.items.push(item);
+        }
+      }
+    }
+    saveData(); // localTime 즉시 갱신 → 이후 onSnapshot 덮어쓰기 차단
+
     row.classList.toggle('done', item.done);
-    // animate then re-render
     row.classList.add(item.done ? 'animate-exit-down' : 'animate-exit-up');
     setTimeout(() => render(), 340);
   });
@@ -1815,6 +1927,7 @@ function loadLocalEvents() {
 }
 function saveLocalEvents() {
   localStorage.setItem(LOCAL_EVENTS_KEY, JSON.stringify(localEvents));
+  localStorage.setItem(LOCAL_EVENTS_KEY + '_ts', Date.now());
   fbSave(eventsRef, { events: localEvents });
 }
 
@@ -2049,6 +2162,7 @@ function loadMemos() {
 }
 function saveMemos() {
   localStorage.setItem(MEMO_LIST_KEY, JSON.stringify(memos));
+  localStorage.setItem(MEMO_LIST_KEY + '_ts', Date.now());
   fbSave(memosRef, { list: memos });
 }
 
@@ -2173,6 +2287,7 @@ function setupFirebaseSync() {
     if (remoteTime >= localTime) {
       cancelPendingSaves(); // 예약된 로컬→Firestore 덮어쓰기 타이머 전부 취소
       _applyingRemote = true;
+      migrateSections(remote.sections);
       data = { sections: remote.sections };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       localStorage.setItem(STORAGE_KEY + '_ts', remoteTime);
