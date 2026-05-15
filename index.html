@@ -223,9 +223,44 @@
   .cal-weekday:last-child  { color: var(--accent); }
 
   .cal-days {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .cal-week { display: flex; flex-direction: column; }
+  .cal-cells {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     gap: 2px;
+  }
+  .cal-event-bars {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    padding-bottom: 2px;
+  }
+  .cal-event-bar {
+    height: 16px;
+    background: #4285f4;
+    border-radius: 0;
+    font-size: 10px;
+    color: #fff;
+    padding: 0 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 16px;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .cal-event-bar:hover { opacity: 0.82; }
+  .cal-event-bar.bar-start {
+    border-top-left-radius: 8px;
+    border-bottom-left-radius: 8px;
+  }
+  .cal-event-bar.bar-end {
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
   }
 
   .cal-day {
@@ -1260,6 +1295,10 @@
     <div class="local-event-modal-header" id="localEventModalTitle">일정 추가</div>
     <div class="local-event-modal-body">
       <input class="local-event-input" id="localEventName" type="text" placeholder="일정 제목" />
+      <div class="local-event-time-row" style="align-items:center;gap:8px;">
+        <span style="font-size:12px;color:var(--text-secondary);white-space:nowrap;flex-shrink:0;">~ 종료일</span>
+        <input class="local-event-input" id="localEventEndDate" type="date" style="flex:1;background:var(--surface);color:var(--text-primary);" />
+      </div>
       <div class="local-event-time-row">
         <input class="local-event-input" id="localEventStart" type="time" />
         <input class="local-event-input" id="localEventEnd" type="time" />
@@ -1854,23 +1893,35 @@ function renderUpcoming() {
 
   const upcoming = [];
 
-  // 로컬 일정
+  // 로컬 일정 (연속 일정은 시작일 기준, 종료일이 오늘 이후이면 포함)
   Object.entries(localEvents).forEach(([key, events]) => {
-    const [y, m, d] = key.split('-').map(Number);
-    const date = new Date(y, m, d);
-    if (date >= today) {
-      events.forEach(ev => {
-        upcoming.push({
-          date,
-          title: ev.name,
-          timeStr: ev.start ? `${ev.start}${ev.end ? ' ~ ' + ev.end : ''}` : '종일',
-          sortTime: extractEventTime(ev),
-          isLocal: true,
-          localKey: key,
-          localId: ev.id
-        });
+    const startDate = keyToDate(key);
+    events.forEach(ev => {
+      const endDate = ev.endDate ? keyToDate(ev.endDate) : startDate;
+      // 종료일이 오늘 이전이면 skip
+      if (endDate < today) return;
+      let timeStr;
+      if (ev.endDate && endDate > startDate) {
+        const sm = months[startDate.getMonth()];
+        const em = months[endDate.getMonth()];
+        if (startDate.getMonth() === endDate.getMonth()) {
+          timeStr = `${sm} ${startDate.getDate()}일 ~ ${endDate.getDate()}일`;
+        } else {
+          timeStr = `${sm} ${startDate.getDate()}일 ~ ${em} ${endDate.getDate()}일`;
+        }
+      } else {
+        timeStr = ev.start ? `${ev.start}${ev.end ? ' ~ ' + ev.end : ''}` : '종일';
+      }
+      upcoming.push({
+        date: startDate,
+        title: ev.name,
+        timeStr,
+        sortTime: extractEventTime(ev),
+        isLocal: true,
+        localKey: key,
+        localId: ev.id
       });
-    }
+    });
   });
 
   upcoming.sort((a, b) => {
@@ -1989,6 +2040,7 @@ function openLocalEventModal(y, m, d) {
   document.getElementById('localEventName').value = '';
   document.getElementById('localEventStart').value = '';
   document.getElementById('localEventEnd').value = '';
+  document.getElementById('localEventEndDate').value = keyToDateInput(`${y}-${m}-${d}`);
   document.querySelector('.local-event-save').textContent = '저장';
   document.getElementById('localEventOverlay').classList.add('open');
   setTimeout(() => document.getElementById('localEventName').focus(), 100);
@@ -2005,6 +2057,9 @@ function openEditLocalEventModal(key, id) {
   document.getElementById('localEventName').value = ev.name;
   document.getElementById('localEventStart').value = ev.start || '';
   document.getElementById('localEventEnd').value = ev.end || '';
+  document.getElementById('localEventEndDate').value = ev.endDate
+    ? keyToDateInput(ev.endDate)
+    : keyToDateInput(`${y}-${m}-${d}`);
   document.querySelector('.local-event-save').textContent = '수정';
   document.getElementById('localEventOverlay').classList.add('open');
   setTimeout(() => document.getElementById('localEventName').focus(), 100);
@@ -2025,14 +2080,26 @@ function saveLocalEvent() {
   if (!name) { document.getElementById('localEventName').focus(); return; }
   const start = document.getElementById('localEventStart').value;
   const end   = document.getElementById('localEventEnd').value;
+  const endDateInput = document.getElementById('localEventEndDate').value;
   const { y, m, d } = localEventTarget;
   const key = `${y}-${m}-${d}`;
+
+  // endDate 처리: 종료일이 시작일보다 이후일 때만 연속 일정
+  let endDate = null;
+  if (endDateInput) {
+    const endKey = dateInputToKey(endDateInput);
+    if (keyToDate(endKey) > keyToDate(key)) endDate = endKey;
+  }
+
+  const evData = { id: localEventEditId || uid(), name, start, end };
+  if (endDate) evData.endDate = endDate;
+
   if (!localEvents[key]) localEvents[key] = [];
   if (localEventEditId) {
     const idx = localEvents[key].findIndex(e => e.id === localEventEditId);
-    if (idx !== -1) localEvents[key][idx] = { id: localEventEditId, name, start, end };
+    if (idx !== -1) localEvents[key][idx] = evData;
   } else {
-    localEvents[key].push({ id: uid(), name, start, end });
+    localEvents[key].push(evData);
   }
   saveLocalEvents();
   closeLocalEventModal();
@@ -2057,10 +2124,28 @@ renderUpcoming();
 
 function showDayEvents(y, m, d) {
   const key = `${y}-${m}-${d}`;
-  const localEvs  = [...(localEvents[key] || [])].sort((a, b) => extractEventTime(a).localeCompare(extractEventTime(b)));
+  const clickedDate = new Date(y, m, d);
   const panel = document.getElementById('calEventPanel');
   const list  = document.getElementById('calEventList');
   const months = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+
+  // 이 날짜에 해당하는 모든 일정 수집 (단일+연속 시작 + 연속 중간/끝)
+  const eventsForDay = [];
+  Object.entries(localEvents).forEach(([eKey, events]) => {
+    const startDate = keyToDate(eKey);
+    (events || []).forEach(ev => {
+      if (!ev.endDate) {
+        // 단일 일정: 날짜가 정확히 일치해야
+        if (eKey === key) eventsForDay.push({ ev, eKey });
+      } else {
+        const endDate = keyToDate(ev.endDate);
+        if (clickedDate >= startDate && clickedDate <= endDate) {
+          eventsForDay.push({ ev, eKey });
+        }
+      }
+    });
+  });
+  eventsForDay.sort((a, b) => extractEventTime(a.ev).localeCompare(extractEventTime(b.ev)));
 
   panel.style.display = 'block';
   const dateStr = `${y}년 ${months[m]} ${d}일`;
@@ -2070,14 +2155,22 @@ function showDayEvents(y, m, d) {
       <button class="cal-add-event-btn" onclick="openLocalEventModal(${y},${m},${d})">+ 일정 추가</button>
     </div>`;
 
-  if (localEvs.length === 0) {
+  if (eventsForDay.length === 0) {
     list.innerHTML += `<div class="cal-no-event">일정 없음</div>`;
     return;
   }
 
-  // 로컬 일정
-  localEvs.forEach(ev => {
-    const timeStr = ev.start ? `${ev.start}${ev.end ? ' ~ ' + ev.end : ''}` : '종일';
+  eventsForDay.forEach(({ ev, eKey }) => {
+    let timeStr;
+    if (ev.endDate) {
+      const sd = keyToDate(eKey);
+      const ed = keyToDate(ev.endDate);
+      const sdStr = `${months[sd.getMonth()]} ${sd.getDate()}일`;
+      const edStr = `${months[ed.getMonth()]} ${ed.getDate()}일`;
+      timeStr = `${sdStr} ~ ${edStr}`;
+    } else {
+      timeStr = ev.start ? `${ev.start}${ev.end ? ' ~ ' + ev.end : ''}` : '종일';
+    }
     list.innerHTML += `
       <div class="cal-event-item">
         <span class="cal-event-dot" style="background:#4285f4"></span>
@@ -2085,8 +2178,8 @@ function showDayEvents(y, m, d) {
           <div class="cal-event-title">${escHtml(ev.name)}</div>
           <div class="cal-event-time">${timeStr}</div>
         </div>
-        <button class="cal-local-edit" onclick="openEditLocalEventModal('${key}','${ev.id}')">✎</button>
-        <button class="cal-local-del" onclick="deleteLocalEvent('${key}','${ev.id}')">✕</button>
+        <button class="cal-local-edit" onclick="openEditLocalEventModal('${eKey}','${ev.id}')">✎</button>
+        <button class="cal-local-del" onclick="deleteLocalEvent('${eKey}','${ev.id}')">✕</button>
       </div>`;
   });
 }
@@ -2094,6 +2187,111 @@ function showDayEvents(y, m, d) {
 // ── Calendar ───────────────────────────────────────────────────────────────
 
 let calYear, calMonth, calSelected;
+
+// ── Multi-day Event Helpers ────────────────────────────────────────────────
+
+function keyToDate(key) {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m, d);
+}
+
+function keyToDateInput(key) {
+  const [y, m, d] = key.split('-').map(Number);
+  return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+function dateInputToKey(inputStr) {
+  const [y, m, d] = inputStr.split('-').map(Number);
+  return `${y}-${m - 1}-${d}`;
+}
+
+function getAllMultiDayEvents() {
+  const results = [];
+  Object.entries(localEvents).forEach(([key, events]) => {
+    const startDate = keyToDate(key);
+    (events || []).forEach(ev => {
+      if (!ev.endDate) return;
+      const endDate = keyToDate(ev.endDate);
+      if (endDate > startDate) {
+        results.push({ ...ev, startDate, endDate, startKey: key });
+      }
+    });
+  });
+  return results;
+}
+
+function renderWeekEventBars(weekDays, multiDayEvents) {
+  const barsEl = document.createElement('div');
+  barsEl.className = 'cal-event-bars';
+
+  const weekStart = new Date(weekDays[0].y, weekDays[0].m, weekDays[0].d);
+  const weekEnd   = new Date(weekDays[6].y, weekDays[6].m, weekDays[6].d);
+
+  const overlapping = multiDayEvents.filter(ev =>
+    ev.startDate <= weekEnd && ev.endDate >= weekStart
+  );
+  if (!overlapping.length) return barsEl;
+
+  const laneItems = overlapping.map(ev => {
+    let startCol = 0, endCol = 6;
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekDays[i].y, weekDays[i].m, weekDays[i].d);
+      if (d >= ev.startDate) { startCol = i; break; }
+    }
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(weekDays[i].y, weekDays[i].m, weekDays[i].d);
+      if (d <= ev.endDate) { endCol = i; break; }
+    }
+    return {
+      ev, startCol, endCol,
+      isStart: ev.startDate >= weekStart,
+      isEnd:   ev.endDate   <= weekEnd,
+      lane: 0
+    };
+  });
+
+  // Greedy lane assignment to avoid overlap
+  const lanes = [];
+  laneItems.forEach(item => {
+    let lane = 0;
+    while (true) {
+      if (!lanes[lane]) { lanes[lane] = []; break; }
+      const conflict = lanes[lane].some(ex =>
+        item.startCol <= ex.endCol && item.endCol >= ex.startCol
+      );
+      if (!conflict) break;
+      lane++;
+    }
+    item.lane = lane;
+    if (!lanes[lane]) lanes[lane] = [];
+    lanes[lane].push({ startCol: item.startCol, endCol: item.endCol });
+  });
+
+  const numLanes = lanes.length;
+  barsEl.style.gridTemplateRows = `repeat(${numLanes}, 18px)`;
+
+  laneItems.forEach(({ ev, startCol, endCol, isStart, isEnd, lane }) => {
+    const bar = document.createElement('div');
+    bar.className = 'cal-event-bar'
+      + (isStart ? ' bar-start' : '')
+      + (isEnd   ? ' bar-end'   : '');
+    bar.style.gridColumn = `${startCol + 1} / ${endCol + 2}`;
+    bar.style.gridRow    = lane + 1;
+    if (isStart) bar.textContent = ev.name;
+    bar.title = ev.name;
+    bar.addEventListener('click', e => {
+      e.stopPropagation();
+      const [sy, sm, sd] = ev.startKey.split('-').map(Number);
+      calSelected = { y: sy, m: sm, d: sd };
+      if (sy !== calYear || sm !== calMonth) { calYear = sy; calMonth = sm; }
+      showDayEvents(sy, sm, sd);
+      renderCal();
+    });
+    barsEl.appendChild(bar);
+  });
+
+  return barsEl;
+}
 
 function calInit() {
   const today = new Date();
@@ -2126,65 +2324,94 @@ function renderCal() {
   const lastDate = new Date(calYear, calMonth + 1, 0).getDate();
   const prevLast = new Date(calYear, calMonth, 0).getDate();
   const totalCells = Math.ceil((firstDay + lastDate) / 7) * 7;
+  const numWeeks = totalCells / 7;
 
   const grid = document.getElementById('calDays');
   grid.innerHTML = '';
 
-  for (let i = 0; i < totalCells; i++) {
-    const cell = document.createElement('div');
-    cell.className = 'cal-day';
+  const multiDayEvents = getAllMultiDayEvents();
 
-    let num, isOther = false;
-    if (i < firstDay) {
-      num = prevLast - firstDay + i + 1; isOther = true;
-      cell.classList.add('other-month');
-    } else if (i >= firstDay + lastDate) {
-      num = i - firstDay - lastDate + 1; isOther = true;
-      cell.classList.add('other-month');
-    } else {
-      num = i - firstDay + 1;
-    }
+  for (let week = 0; week < numWeeks; week++) {
+    const weekEl = document.createElement('div');
+    weekEl.className = 'cal-week';
 
-    const numSpan = document.createElement('span');
-    numSpan.textContent = num;
-    cell.appendChild(numSpan);
+    const cellsEl = document.createElement('div');
+    cellsEl.className = 'cal-cells';
 
-    const col = i % 7;
-    if (!isOther) {
-      if (col === 0) cell.classList.add('sunday');
-      if (col === 6) cell.classList.add('saturday');
+    const weekDays = [];
 
-      if (num === today.getDate() && calMonth === today.getMonth() && calYear === today.getFullYear())
-        cell.classList.add('today');
+    for (let col = 0; col < 7; col++) {
+      const i = week * 7 + col;
+      const cell = document.createElement('div');
+      cell.className = 'cal-day';
 
-      if (calSelected && num === calSelected.d && calMonth === calSelected.m && calYear === calSelected.y)
-        cell.classList.add('selected');
+      let num, isOther = false;
+      let cellY = calYear, cellM = calMonth, cellD;
 
-      // 이벤트 점 (구글 + 로컬 합산)
-      const key = `${calYear}-${calMonth}-${num}`;
-      const totalEvs = (localEvents[key] || []).length;
-      if (totalEvs > 0) {
-        const dotRow = document.createElement('div');
-        dotRow.className = 'event-dot-row';
-        const count = Math.min(totalEvs, 3);
-        for (let d = 0; d < count; d++) {
-          const dot = document.createElement('span');
-          dot.className = 'event-dot';
-          dotRow.appendChild(dot);
-        }
-        cell.appendChild(dotRow);
+      if (i < firstDay) {
+        num = prevLast - firstDay + i + 1; isOther = true;
+        cell.classList.add('other-month');
+        const prevDate = new Date(calYear, calMonth, 0);
+        cellY = prevDate.getFullYear(); cellM = prevDate.getMonth(); cellD = num;
+      } else if (i >= firstDay + lastDate) {
+        num = i - firstDay - lastDate + 1; isOther = true;
+        cell.classList.add('other-month');
+        const nextDate = new Date(calYear, calMonth + 1, 1);
+        cellY = nextDate.getFullYear(); cellM = nextDate.getMonth(); cellD = num;
+      } else {
+        num = i - firstDay + 1; cellD = num;
       }
 
-      cell.addEventListener('click', () => {
-        calSelected = { y: calYear, m: calMonth, d: num };
-        showDayEvents(calYear, calMonth, num);
-        renderCal();
-      });
-    } else {
-      cell.classList.add('empty');
+      weekDays.push({ y: cellY, m: cellM, d: cellD, isOther, col });
+
+      const numSpan = document.createElement('span');
+      numSpan.textContent = num;
+      cell.appendChild(numSpan);
+
+      if (!isOther) {
+        if (col === 0) cell.classList.add('sunday');
+        if (col === 6) cell.classList.add('saturday');
+
+        if (num === today.getDate() && calMonth === today.getMonth() && calYear === today.getFullYear())
+          cell.classList.add('today');
+
+        if (calSelected && num === calSelected.d && calMonth === calSelected.m && calYear === calSelected.y)
+          cell.classList.add('selected');
+
+        // 단일 일정 점 표시
+        const key = `${calYear}-${calMonth}-${num}`;
+        const singleEvs = (localEvents[key] || []).filter(ev => !ev.endDate);
+        if (singleEvs.length > 0) {
+          const dotRow = document.createElement('div');
+          dotRow.className = 'event-dot-row';
+          const count = Math.min(singleEvs.length, 3);
+          for (let d = 0; d < count; d++) {
+            const dot = document.createElement('span');
+            dot.className = 'event-dot';
+            dotRow.appendChild(dot);
+          }
+          cell.appendChild(dotRow);
+        }
+
+        cell.addEventListener('click', () => {
+          calSelected = { y: calYear, m: calMonth, d: num };
+          showDayEvents(calYear, calMonth, num);
+          renderCal();
+        });
+      } else {
+        cell.classList.add('empty');
+      }
+
+      cellsEl.appendChild(cell);
     }
 
-    grid.appendChild(cell);
+    weekEl.appendChild(cellsEl);
+
+    // 연속 일정 바 렌더링
+    const barsEl = renderWeekEventBars(weekDays, multiDayEvents);
+    if (barsEl.children.length > 0) weekEl.appendChild(barsEl);
+
+    grid.appendChild(weekEl);
   }
 }
 
