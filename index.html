@@ -1622,17 +1622,15 @@ function buildSection(sec) {
       }
     });
 
-    // 섹션 드래그 핸들 이벤트
+    // 섹션 드래그 핸들 이벤트 (핸들 자체를 draggable로)
     const handle = hdr.querySelector('.section-drag-handle');
-    handle.addEventListener('mousedown', () => { wrap.draggable = true; });
+    handle.draggable = true;
     handle.addEventListener('dragstart', e => {
       dragSection = sec;
       e.dataTransfer.effectAllowed = 'move';
       setTimeout(() => wrap.classList.add('section-dragging'), 0);
     });
-
-    wrap.addEventListener('dragend', () => {
-      wrap.draggable = false;
+    handle.addEventListener('dragend', () => {
       wrap.classList.remove('section-dragging');
       document.querySelectorAll('.drag-over-section').forEach(el => el.classList.remove('drag-over-section'));
       dragSection = null;
