@@ -778,6 +778,22 @@
     color: var(--danger);
   }
 
+  .section-drag-handle {
+    cursor: grab;
+    color: var(--text-secondary);
+    opacity: 0;
+    transition: opacity var(--transition);
+    flex-shrink: 0;
+    padding: 2px 4px;
+    display: flex;
+    align-items: center;
+    user-select: none;
+  }
+  .section-header:hover .section-drag-handle { opacity: 1; }
+  .section-drag-handle:active { cursor: grabbing; }
+  .section.section-dragging { opacity: 0.35; }
+  .section.drag-over-section { border-top: 2px solid var(--accent); }
+
   /* ── Items ── */
   .items-list {
     padding: 6px 0;
@@ -1576,6 +1592,13 @@ function buildSection(sec) {
     `;
   } else {
     hdr.innerHTML = `
+      <span class="section-drag-handle" title="드래그하여 순서 변경">
+        <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor">
+          <circle cx="3" cy="3" r="1.5"/><circle cx="7" cy="3" r="1.5"/>
+          <circle cx="3" cy="7" r="1.5"/><circle cx="7" cy="7" r="1.5"/>
+          <circle cx="3" cy="11" r="1.5"/><circle cx="7" cy="11" r="1.5"/>
+        </svg>
+      </span>
       <span class="toggle-arrow">
         <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="4,2 10,7 4,12"/>
@@ -1598,6 +1621,46 @@ function buildSection(sec) {
         render();
       }
     });
+
+    // 섹션 드래그 핸들 이벤트
+    const handle = hdr.querySelector('.section-drag-handle');
+    handle.addEventListener('mousedown', () => { wrap.draggable = true; });
+    handle.addEventListener('dragstart', e => {
+      dragSection = sec;
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(() => wrap.classList.add('section-dragging'), 0);
+    });
+
+    wrap.addEventListener('dragend', () => {
+      wrap.draggable = false;
+      wrap.classList.remove('section-dragging');
+      document.querySelectorAll('.drag-over-section').forEach(el => el.classList.remove('drag-over-section'));
+      dragSection = null;
+    });
+
+    wrap.addEventListener('dragover', e => {
+      if (!dragSection || dragSection.id === sec.id || sec._system) return;
+      e.preventDefault();
+      document.querySelectorAll('.drag-over-section').forEach(el => el.classList.remove('drag-over-section'));
+      wrap.classList.add('drag-over-section');
+    });
+
+    wrap.addEventListener('dragleave', e => {
+      if (!wrap.contains(e.relatedTarget)) wrap.classList.remove('drag-over-section');
+    });
+
+    wrap.addEventListener('drop', e => {
+      e.preventDefault();
+      wrap.classList.remove('drag-over-section');
+      if (!dragSection || dragSection.id === sec.id) return;
+      pushHistory();
+      const fromIdx = data.sections.findIndex(s => s.id === dragSection.id);
+      const toIdx   = data.sections.findIndex(s => s.id === sec.id);
+      data.sections.splice(fromIdx, 1);
+      data.sections.splice(toIdx, 0, dragSection);
+      dragSection = null;
+      render();
+    });
   }
   hdr.querySelector('.toggle-arrow').addEventListener('click', e => {
     e.stopPropagation();
@@ -1619,6 +1682,7 @@ function buildSection(sec) {
 
   // 빈 섹션에 드롭 가능하도록
   ul.addEventListener('dragover', e => {
+    if (dragSection) return;
     e.preventDefault();
     ul.classList.add('drag-target');
   });
@@ -1626,6 +1690,7 @@ function buildSection(sec) {
     if (!ul.contains(e.relatedTarget)) ul.classList.remove('drag-target');
   });
   ul.addEventListener('drop', e => {
+    if (dragSection) return;
     e.preventDefault();
     ul.classList.remove('drag-target');
     if (!dragItem) return;
@@ -1697,6 +1762,7 @@ function buildSection(sec) {
 
 let dragItem = null;
 let dragFromSec = null;
+let dragSection = null;
 
 function buildItem(item, sec) {
   const row = document.createElement('div');
@@ -1716,11 +1782,13 @@ function buildItem(item, sec) {
     document.querySelectorAll('.drag-target').forEach(el => el.classList.remove('drag-target'));
   });
   row.addEventListener('dragover', e => {
+    if (dragSection) return;
     e.preventDefault();
     document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
     if (dragItem && item.id !== dragItem.id) row.classList.add('drag-over');
   });
   row.addEventListener('drop', e => {
+    if (dragSection) return;
     e.preventDefault();
     if (!dragItem || item.id === dragItem.id) return;
     // 같은 섹션 내 순서 변경
