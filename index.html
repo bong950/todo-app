@@ -1565,7 +1565,8 @@ function render() {
   data.sections.forEach(sec => {
     list.appendChild(buildSection(sec));
   });
-  saveData();
+  // saveData()는 여기서 호출하지 않음 — 빈 브라우저로 열 때 defaultData가 Firebase를 덮는 버그 방지
+  // 각 사용자 액션 핸들러에서 개별적으로 saveData()를 호출합니다
 }
 
 function buildSection(sec) {
@@ -1621,6 +1622,7 @@ function buildSection(sec) {
       if (sec.items.length === 0 || confirm(`"${sec.name}" 섹션을 삭제할까요?`)) {
         pushHistory();
         data.sections = data.sections.filter(s => s.id !== sec.id);
+        saveData();
         render();
       }
     });
@@ -1660,6 +1662,7 @@ function buildSection(sec) {
       data.sections.splice(fromIdx, 1);
       data.sections.splice(toIdx, 0, dragSection);
       dragSection = null;
+      saveData();
       render();
     });
   }
@@ -1700,6 +1703,7 @@ function buildSection(sec) {
       dragFromSec.items = dragFromSec.items.filter(i => i.id !== dragItem.id);
       sec.items.push(dragItem);
       dragItem = null; dragFromSec = null;
+      saveData();
       render();
     }
   });
@@ -1746,6 +1750,7 @@ function buildSection(sec) {
         if (val) {
           pushHistory();
           sec.items.push({ id: uid(), text: val, done: false, sub: false, link: '' });
+          saveData();
           render();
           setTimeout(() => {
             const secEl = document.querySelector(`[data-id="${sec.id}"]`);
@@ -1805,6 +1810,7 @@ function buildItem(item, sec) {
       sec.items.splice(toIdx, 0, dragItem);
     }
     dragItem = null; dragFromSec = null;
+    saveData();
     render();
   });
 
@@ -1879,6 +1885,7 @@ function buildItem(item, sec) {
   row.querySelector('.sub-btn').addEventListener('click', () => {
     pushHistory();
     item.sub = !item.sub;
+    saveData();
     render();
   });
 
@@ -1888,6 +1895,7 @@ function buildItem(item, sec) {
     if (url !== null) {
       pushHistory();
       item.link = url.trim();
+      saveData();
       render();
     }
   });
@@ -1896,6 +1904,7 @@ function buildItem(item, sec) {
   row.querySelector('.item-btn.del').addEventListener('click', () => {
     pushHistory();
     sec.items = sec.items.filter(i => i.id !== item.id);
+    saveData();
     render();
   });
 
@@ -1928,6 +1937,7 @@ function addSection() {
     open: true,
     items: []
   });
+  saveData();
   render();
 }
 
