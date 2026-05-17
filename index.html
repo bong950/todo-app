@@ -1403,6 +1403,7 @@ function cancelPendingSaves() {
 // ── State ──────────────────────────────────────────────────────────────────
 
 const STORAGE_KEY = 'todo_data_v2';
+const LOCAL_EDIT_TS_KEY = 'todo_data_v2_localEdit'; // 이 기기에서 마지막으로 직접 편집한 시각
 
 let data = loadData();
 
@@ -1540,7 +1541,9 @@ function loadData() {
 function saveData(addHistory = false) {
   if (addHistory) pushHistory();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  localStorage.setItem(STORAGE_KEY + '_ts', Date.now());
+  const now = Date.now();
+  localStorage.setItem(STORAGE_KEY + '_ts', now);
+  localStorage.setItem(LOCAL_EDIT_TS_KEY, now); // 이 기기 직접 편집 시각 기록
   fbSave(todosRef, { sections: data.sections });
 }
 
@@ -2633,10 +2636,12 @@ function setupFirebaseSync() {
     }
     const remote = snap.data();
     if (!remote || !remote.sections) return;
-    const remoteTime = remote.updatedAt || 0;
-    const localTime  = parseInt(localStorage.getItem(STORAGE_KEY + '_ts') || '0');
-    if (remoteTime >= localTime) {
-      cancelPendingSaves(); // 예약된 로컬→Firestore 덮어쓰기 타이머 전부 취소
+    const remoteTime   = remote.updatedAt || 0;
+    const localEditTs  = parseInt(localStorage.getItem(LOCAL_EDIT_TS_KEY) || '0');
+    // 이 기기에서 마지막 편집 후 3초 이상 지난 경우에만 원격 데이터를 적용
+    // → 다른 기기의 오래된 데이터가 새 타임스탬프로 올라와도 최근 편집 내용 보호
+    if (remoteTime > localEditTs + 3000) {
+      cancelPendingSaves();
       _applyingRemote = true;
       migrateSections(remote.sections);
       data = { sections: remote.sections };
