@@ -1,4 +1,4 @@
-import { env, SamModel, AutoProcessor, RawImage, Tensor } from './lib/transformers.min.js';
+import { env, SamModel, AutoProcessor, RawImage, Tensor } from 'http://localhost:3457/lib/transformers.min.js';
 
 env.allowLocalModels = false;
 

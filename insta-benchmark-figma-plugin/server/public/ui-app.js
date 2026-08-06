@@ -83,34 +83,20 @@ document.getElementById('cancel-btn').addEventListener('click', () => {
   currentImageBitmap = null;
 });
 
-async function openMagicLayerEditor(msg) {
-  sourceNodeMeta = { nodeId: msg.nodeId, x: msg.x, y: msg.y, width: msg.width, height: msg.height };
-  points = [];
-  lastMask = null;
-
-  const blob = new Blob([new Uint8Array(msg.imageBytes)], { type: 'image/png' });
-  currentImageBitmap = await createImageBitmap(blob);
-
-  const canvas = document.getElementById('editor-canvas');
-  const scale = Math.min(360 / currentImageBitmap.width, 1);
-  canvas.width = currentImageBitmap.width * scale;
-  canvas.height = currentImageBitmap.height * scale;
-  canvas.getContext('2d').drawImage(currentImageBitmap, 0, 0, canvas.width, canvas.height);
-
-  document.getElementById('editor').classList.remove('hidden');
-  setStatus('이미지 인코딩 중...');
-
-  const buf = await blob.arrayBuffer();
-  getSamWorker().postMessage({ type: 'segment', data: buf });
-}
-
 let samWorker = null;
 let points = [];
 let lastMask = null;
 
-function getSamWorker() {
+async function getSamWorker() {
   if (!samWorker) {
-    samWorker = new Worker('http://localhost:3457/sam-worker.js', { type: 'module' });
+    // Figma plugin UI iframes have an opaque origin, and the Worker constructor's
+    // top-level script fetch is forced to same-origin mode, so a cross-origin
+    // `new Worker('http://localhost:3457/sam-worker.js')` throws SecurityError.
+    // Work around it by fetching the script as text and constructing the worker
+    // from a same-origin blob: URL instead.
+    const src = await (await fetch('http://localhost:3457/sam-worker.js')).text();
+    const blob = new Blob([src], { type: 'text/javascript' });
+    samWorker = new Worker(URL.createObjectURL(blob), { type: 'module' });
     samWorker.onmessage = handleSamMessage;
   }
   return samWorker;
@@ -135,11 +121,11 @@ function handleSamMessage(e) {
   }
 }
 
-document.getElementById('sam-retry-btn').addEventListener('click', () => {
+document.getElementById('sam-retry-btn').addEventListener('click', async (e) => {
   if (!lastFailedMessage) return;
   document.getElementById('sam-retry-btn').classList.add('hidden');
   setStatus('재시도 중...');
-  getSamWorker().postMessage(lastFailedMessage);
+  (await getSamWorker()).postMessage(lastFailedMessage);
 });
 
 function drawMaskOverlay(mask) {
@@ -163,7 +149,7 @@ function drawMaskOverlay(mask) {
   ctx.drawImage(maskCanvas, 0, 0, canvas.width, canvas.height);
 }
 
-document.getElementById('editor-canvas').addEventListener('click', (e) => {
+document.getElementById('editor-canvas').addEventListener('click', async (e) => {
   if (!currentImageBitmap) return;
   const canvas = e.target;
   const rect = canvas.getBoundingClientRect();
@@ -171,8 +157,29 @@ document.getElementById('editor-canvas').addEventListener('click', (e) => {
   const yNorm = (e.clientY - rect.top) / rect.height;
   const label = e.shiftKey ? 0 : 1;
   points.push({ point: [xNorm, yNorm], label });
-  getSamWorker().postMessage({ type: 'decode', data: points });
+  (await getSamWorker()).postMessage({ type: 'decode', data: points });
 });
+
+async function openMagicLayerEditor(msg) {
+  sourceNodeMeta = { nodeId: msg.nodeId, x: msg.x, y: msg.y, width: msg.width, height: msg.height };
+  points = [];
+  lastMask = null;
+
+  const blob = new Blob([new Uint8Array(msg.imageBytes)], { type: 'image/png' });
+  currentImageBitmap = await createImageBitmap(blob);
+
+  const canvas = document.getElementById('editor-canvas');
+  const scale = Math.min(360 / currentImageBitmap.width, 1);
+  canvas.width = currentImageBitmap.width * scale;
+  canvas.height = currentImageBitmap.height * scale;
+  canvas.getContext('2d').drawImage(currentImageBitmap, 0, 0, canvas.width, canvas.height);
+
+  document.getElementById('editor').classList.remove('hidden');
+  setStatus('이미지 인코딩 중...');
+
+  const buf = await blob.arrayBuffer();
+  (await getSamWorker()).postMessage({ type: 'segment', data: buf });
+}
 
 async function imageDataToPngBytes(imageData) {
   const canvas = document.createElement('canvas');
