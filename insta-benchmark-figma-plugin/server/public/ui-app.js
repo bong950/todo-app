@@ -2,6 +2,9 @@ function setStatus(text) {
   document.getElementById('status').textContent = text;
 }
 
+const magicLayerBtn = document.getElementById('magic-layer-btn');
+magicLayerBtn.disabled = true;
+
 window.onmessage = (event) => {
   const msg = event.data.pluginMessage;
   if (!msg) return;
@@ -9,6 +12,12 @@ window.onmessage = (event) => {
     setStatus('code.js와 통신 확인됨');
   } else if (msg.type === 'import-done') {
     setStatus('임포트 완료!');
+  } else if (msg.type === 'magic-layer-source') {
+    openMagicLayerEditor(msg);
+  } else if (msg.type === 'magic-layer-error') {
+    setStatus(msg.message);
+  } else if (msg.type === 'selection-state') {
+    magicLayerBtn.disabled = !msg.hasImageFill;
   }
 };
 
@@ -58,3 +67,32 @@ importForm.addEventListener('submit', async (e) => {
     }
   }
 });
+
+let sourceNodeMeta = null;
+let currentImageBitmap = null;
+
+document.getElementById('magic-layer-btn').addEventListener('click', () => {
+  parent.postMessage({ pluginMessage: { type: 'request-magic-layer' } }, '*');
+});
+
+document.getElementById('cancel-btn').addEventListener('click', () => {
+  document.getElementById('editor').classList.add('hidden');
+  sourceNodeMeta = null;
+  currentImageBitmap = null;
+});
+
+async function openMagicLayerEditor(msg) {
+  sourceNodeMeta = { nodeId: msg.nodeId, x: msg.x, y: msg.y, width: msg.width, height: msg.height };
+
+  const blob = new Blob([new Uint8Array(msg.imageBytes)], { type: 'image/png' });
+  currentImageBitmap = await createImageBitmap(blob);
+
+  const canvas = document.getElementById('editor-canvas');
+  const scale = Math.min(360 / currentImageBitmap.width, 1);
+  canvas.width = currentImageBitmap.width * scale;
+  canvas.height = currentImageBitmap.height * scale;
+  canvas.getContext('2d').drawImage(currentImageBitmap, 0, 0, canvas.width, canvas.height);
+
+  document.getElementById('editor').classList.remove('hidden');
+  setStatus('이미지 준비됨');
+}

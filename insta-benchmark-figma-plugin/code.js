@@ -1,12 +1,49 @@
 figma.showUI(__html__, { width: 420, height: 640 });
 
+figma.on('selectionchange', () => {
+  postSelectionState();
+});
+
+function postSelectionState() {
+  const selection = figma.currentPage.selection;
+  const node = selection[0];
+  const hasImageFill =
+    selection.length === 1 && node && 'fills' in node && Array.isArray(node.fills) && node.fills.some((f) => f.type === 'IMAGE');
+  figma.ui.postMessage({ type: 'selection-state', hasImageFill });
+}
+
 figma.ui.onmessage = async (msg) => {
   if (msg.type === 'ping') {
     figma.ui.postMessage({ type: 'pong' });
   } else if (msg.type === 'import-post') {
     await handleImportPost(msg);
+  } else if (msg.type === 'request-magic-layer') {
+    await handleMagicLayerRequest();
   }
 };
+
+async function handleMagicLayerRequest() {
+  const selection = figma.currentPage.selection;
+  const node = selection[0];
+  const hasImageFill =
+    selection.length === 1 && node && 'fills' in node && Array.isArray(node.fills) && node.fills.some((f) => f.type === 'IMAGE');
+
+  if (!hasImageFill) {
+    figma.ui.postMessage({ type: 'magic-layer-error', message: '이미지가 있는 레이어를 하나만 선택해주세요.' });
+    return;
+  }
+
+  const bytes = await node.exportAsync({ format: 'PNG' });
+  figma.ui.postMessage({
+    type: 'magic-layer-source',
+    imageBytes: Array.from(bytes),
+    nodeId: node.id,
+    x: node.x,
+    y: node.y,
+    width: node.width,
+    height: node.height,
+  });
+}
 
 async function handleImportPost({ images, caption, author }) {
   const GAP = 24;
