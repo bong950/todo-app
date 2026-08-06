@@ -7,7 +7,6 @@
   "editorType": ["figma"],
   "networkAccess": {
     "allowedDomains": [
-      "http://localhost:3457",
       "https://*.cdninstagram.com",
       "https://*.fbcdn.net",
       "https://cdn.jsdelivr.net",
@@ -16,6 +15,7 @@
       "https://cdn-lfs.huggingface.co",
       "https://cdn-lfs-us-1.huggingface.co",
       "https://*.huggingface.co"
-    ]
+    ],
+    "devAllowedDomains": ["http://localhost:3457"]
   }
 }
