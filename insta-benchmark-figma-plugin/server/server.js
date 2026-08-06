@@ -44,6 +44,7 @@ async function fetchInstagramHtml(url) {
       'User-Agent':
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
     },
+    signal: AbortSignal.timeout(15000),
   });
   if (!res.ok) {
     throw new Error(`INSTAGRAM_FETCH_FAILED:${res.status}`);
@@ -56,6 +57,19 @@ async function handleParse(req, res, parsedUrl) {
   if (!target) {
     res.writeHead(400, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ message: 'url 쿼리 파라미터가 필요해요' }));
+    return;
+  }
+  let parsedTarget;
+  try {
+    parsedTarget = new URL(target);
+  } catch {
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ message: '올바른 URL 형식이 아니에요' }));
+    return;
+  }
+  if (parsedTarget.protocol !== 'https:' || !/(^|\.)instagram\.com$/.test(parsedTarget.hostname)) {
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ message: '인스타그램 게시물 링크만 지원해요' }));
     return;
   }
   try {

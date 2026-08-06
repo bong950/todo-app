@@ -5,7 +5,7 @@
   "description": "인스타그램 게시물 벤치마킹용 피그마 플러그인 (링크 임포트 + 매직레이어 오브젝트 분리)",
   "scripts": {
     "server": "node server/server.js",
-    "test": "node --test server/",
+    "test": "node --test server/*.test.js",
     "vendor:sam": "cp node_modules/@huggingface/transformers/dist/transformers.min.js server/public/lib/transformers.min.js"
   },
   "engines": {

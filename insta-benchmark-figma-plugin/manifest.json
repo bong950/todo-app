@@ -14,7 +14,8 @@
       "https://huggingface.co",
       "https://*.hf.co",
       "https://cdn-lfs.huggingface.co",
-      "https://cdn-lfs-us-1.huggingface.co"
+      "https://cdn-lfs-us-1.huggingface.co",
+      "https://*.huggingface.co"
     ]
   }
 }

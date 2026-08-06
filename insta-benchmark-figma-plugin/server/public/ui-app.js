@@ -16,6 +16,8 @@ window.onmessage = (event) => {
     openMagicLayerEditor(msg);
   } else if (msg.type === 'magic-layer-error') {
     setStatus(msg.message);
+  } else if (msg.type === 'import-error') {
+    setStatus(msg.message);
   } else if (msg.type === 'selection-state') {
     magicLayerBtn.disabled = !msg.hasImageFill;
   } else if (msg.type === 'magic-layer-done') {
@@ -44,8 +46,11 @@ importForm.addEventListener('submit', async (e) => {
     const imagePayloads = [];
     for (const imgUrl of data.images) {
       const imgRes = await fetch(imgUrl);
+      if (!imgRes.ok) {
+        throw new Error(`이미지를 가져오지 못했어요 (${imgRes.status})`);
+      }
       const buf = new Uint8Array(await imgRes.arrayBuffer());
-      imagePayloads.push(Array.from(buf));
+      imagePayloads.push(buf);
     }
 
     parent.postMessage(
@@ -232,8 +237,8 @@ document.getElementById('extract-btn').addEventListener('click', async () => {
         y: sourceNodeMeta.y,
         width: sourceNodeMeta.width,
         height: sourceNodeMeta.height,
-        cutoutBytes: Array.from(cutoutBytes),
-        backgroundBytes: Array.from(bgBytes),
+        cutoutBytes,
+        backgroundBytes: bgBytes,
       },
     },
     '*',
