@@ -20,7 +20,8 @@ function setCors(res) {
   // Chrome's Private Network Access policy blocks fetches from a
   // remote/opaque-origin document (e.g. Figma's plugin UI iframe) to a
   // loopback address like localhost unless the server explicitly opts in.
-  // Without this, sam-worker.js's own fetch() of this server fails silently.
+  // Without this, ui-app.js's own fetch()/dynamic import() of this server
+  // (including the SAM library) fails silently.
   res.setHeader('Access-Control-Allow-Private-Network', 'true');
 }
 

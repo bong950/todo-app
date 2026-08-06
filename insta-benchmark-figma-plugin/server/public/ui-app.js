@@ -88,66 +88,85 @@ document.getElementById('cancel-btn').addEventListener('click', () => {
   currentImageBitmap = null;
 });
 
-let samWorkerPromise = null;
 let points = [];
 let lastMask = null;
 
-function getSamWorker() {
-  if (!samWorkerPromise) {
-    // Figma plugin UI iframes have an opaque origin, and the Worker constructor's
-    // top-level script fetch is forced to same-origin mode, so a cross-origin
-    // `new Worker('http://localhost:3457/sam-worker.js')` throws SecurityError.
-    // Work around it by fetching the script as text and constructing the worker
-    // from a same-origin blob: URL instead.
-    //
-    // The in-flight promise itself (not the resolved worker) is memoized so
-    // concurrent callers all await the same creation instead of racing past
-    // the `if (!samWorkerPromise)` guard and spawning duplicate workers.
-    samWorkerPromise = (async () => {
+// SAM used to run in a dedicated Worker, constructed from a same-origin
+// blob: URL (to work around the cross-origin Worker restriction on Figma's
+// plugin UI iframe). That works from a normal page, but Figma actually
+// serves the plugin UI as a `data:text/html;base64,...` document — a
+// genuinely opaque-origin context — and Worker construction itself fails
+// there (confirmed by reproducing the exact same embedding: a data:
+// iframe's own Worker() call never fires ready, error, or message; the
+// identical SAM calls made directly on that iframe's own thread, with no
+// Worker involved, complete normally). So SAM now runs inline in the UI
+// thread instead of a Worker. This can make the UI briefly less responsive
+// during encoding, an acceptable trade-off for this local single-user tool
+// versus a feature that silently never completes.
+let transformersModulePromise = null;
+function getTransformersModule() {
+  if (!transformersModulePromise) {
+    transformersModulePromise = import('http://localhost:3457/lib/transformers.min.js');
+  }
+  return transformersModulePromise;
+}
+
+const SAM_MODEL_ID = 'Xenova/slimsam-77-uniform';
+let modelAndProcessorPromise = null;
+function getModelAndProcessor() {
+  if (!modelAndProcessorPromise) {
+    modelAndProcessorPromise = (async () => {
       try {
-        const src = await (await fetch('http://localhost:3457/sam-worker.js')).text();
-        const blob = new Blob([src], { type: 'text/javascript' });
-        const objectUrl = URL.createObjectURL(blob);
-        const worker = new Worker(objectUrl, { type: 'module' });
-        worker.onmessage = handleSamMessage;
-        worker.onerror = (event) => {
-          setStatus('SAM 워커 로드 실패: ' + (event.message || event));
-        };
-        URL.revokeObjectURL(objectUrl);
-        return worker;
+        const { env, SamModel, AutoProcessor } = await getTransformersModule();
+        env.allowLocalModels = false;
+        const model = await SamModel.from_pretrained(SAM_MODEL_ID, { quantized: true });
+        const processor = await AutoProcessor.from_pretrained(SAM_MODEL_ID);
+        return { model, processor };
       } catch (err) {
-        samWorkerPromise = null;
+        modelAndProcessorPromise = null;
         throw err;
       }
     })();
   }
-  return samWorkerPromise;
+  return modelAndProcessorPromise;
 }
 
-let lastFailedMessage = null;
+let image_inputs = null;
+let image_embeddings = null;
 
-function handleSamMessage(e) {
-  const msg = e.data;
-  if (msg.type === 'ready') {
-    setStatus('SAM 모델 준비됨 (최초 1회는 모델 다운로드로 시간이 걸릴 수 있어요)');
-  } else if (msg.type === 'segment_result') {
-    if (msg.data === 'start') setStatus('이미지 인코딩 중...');
-    if (msg.data === 'done') setStatus('오브젝트를 클릭하세요 (Shift+클릭 = 마이너스 포인트)');
-  } else if (msg.type === 'decode_result') {
-    lastMask = msg.data.mask;
-    drawMaskOverlay(msg.data.mask);
-  } else if (msg.type === 'error') {
-    lastFailedMessage = msg.retry;
-    setStatus(`모델 처리 중 오류가 발생했어요: ${msg.message}`);
-    document.getElementById('sam-retry-btn').classList.remove('hidden');
-  }
+async function runSegment(imageBuf) {
+  const { RawImage } = await getTransformersModule();
+  const { model, processor } = await getModelAndProcessor();
+  const blob = new Blob([imageBuf], { type: 'image/png' });
+  const image = await RawImage.fromBlob(blob);
+  image_inputs = await processor(image);
+  image_embeddings = await model.get_image_embeddings(image_inputs);
 }
 
-document.getElementById('sam-retry-btn').addEventListener('click', async (e) => {
-  if (!lastFailedMessage) return;
+async function runDecode(pointsList) {
+  const { Tensor, RawImage } = await getTransformersModule();
+  const { model, processor } = await getModelAndProcessor();
+  const reshaped = image_inputs.reshaped_input_sizes[0];
+  const pts = pointsList.map((pt) => [pt.point[0] * reshaped[1], pt.point[1] * reshaped[0]]);
+  const labels = pointsList.map((pt) => BigInt(pt.label));
+  const input_points = new Tensor('float32', pts.flat(Infinity), [1, 1, pts.length, 2]);
+  const input_labels = new Tensor('int64', labels.flat(Infinity), [1, 1, labels.length]);
+  const outputs = await model({ ...image_embeddings, input_points, input_labels });
+  const masks = await processor.post_process_masks(outputs.pred_masks, image_inputs.original_sizes, image_inputs.reshaped_input_sizes);
+  const maskImage = RawImage.fromTensor(masks[0][0]);
+  return {
+    mask: { data: maskImage.data, width: maskImage.width, height: maskImage.height },
+    scores: Array.from(outputs.iou_scores.data),
+  };
+}
+
+let lastFailedRetry = null;
+
+document.getElementById('sam-retry-btn').addEventListener('click', async () => {
+  if (!lastFailedRetry) return;
   document.getElementById('sam-retry-btn').classList.add('hidden');
   setStatus('재시도 중...');
-  (await getSamWorker()).postMessage(lastFailedMessage);
+  await lastFailedRetry();
 });
 
 function drawMaskOverlay(mask) {
@@ -172,20 +191,34 @@ function drawMaskOverlay(mask) {
 }
 
 document.getElementById('editor-canvas').addEventListener('click', async (e) => {
-  if (!currentImageBitmap) return;
+  if (!currentImageBitmap || !image_embeddings) return;
   const canvas = e.target;
   const rect = canvas.getBoundingClientRect();
   const xNorm = (e.clientX - rect.left) / rect.width;
   const yNorm = (e.clientY - rect.top) / rect.height;
   const label = e.shiftKey ? 0 : 1;
   points.push({ point: [xNorm, yNorm], label });
-  (await getSamWorker()).postMessage({ type: 'decode', data: points });
+
+  const attemptDecode = async () => {
+    try {
+      const result = await runDecode(points);
+      lastMask = result.mask;
+      drawMaskOverlay(result.mask);
+    } catch (err) {
+      lastFailedRetry = attemptDecode;
+      setStatus(`모델 처리 중 오류가 발생했어요: ${err.message}`);
+      document.getElementById('sam-retry-btn').classList.remove('hidden');
+    }
+  };
+  await attemptDecode();
 });
 
 async function openMagicLayerEditor(msg) {
   sourceNodeMeta = { nodeId: msg.nodeId, x: msg.x, y: msg.y, width: msg.width, height: msg.height };
   points = [];
   lastMask = null;
+  image_inputs = null;
+  image_embeddings = null;
 
   const blob = new Blob([new Uint8Array(msg.imageBytes)], { type: 'image/png' });
   currentImageBitmap = await createImageBitmap(blob);
@@ -197,10 +230,20 @@ async function openMagicLayerEditor(msg) {
   canvas.getContext('2d').drawImage(currentImageBitmap, 0, 0, canvas.width, canvas.height);
 
   document.getElementById('editor').classList.remove('hidden');
-  setStatus('이미지 인코딩 중...');
 
   const buf = await blob.arrayBuffer();
-  (await getSamWorker()).postMessage({ type: 'segment', data: buf });
+  const attemptSegment = async () => {
+    setStatus('이미지 인코딩 중... (최초 1회는 모델 다운로드로 시간이 걸릴 수 있어요)');
+    try {
+      await runSegment(buf);
+      setStatus('오브젝트를 클릭하세요 (Shift+클릭 = 마이너스 포인트)');
+    } catch (err) {
+      lastFailedRetry = attemptSegment;
+      setStatus(`모델 처리 중 오류가 발생했어요: ${err.message}`);
+      document.getElementById('sam-retry-btn').classList.remove('hidden');
+    }
+  };
+  await attemptSegment();
 }
 
 async function imageDataToPngBytes(imageData) {
