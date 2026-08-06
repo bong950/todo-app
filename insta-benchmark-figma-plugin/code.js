@@ -4,6 +4,8 @@ figma.on('selectionchange', () => {
   postSelectionState();
 });
 
+postSelectionState();
+
 function postSelectionState() {
   const selection = figma.currentPage.selection;
   const node = selection[0];
