@@ -83,6 +83,8 @@ document.getElementById('cancel-btn').addEventListener('click', () => {
 
 async function openMagicLayerEditor(msg) {
   sourceNodeMeta = { nodeId: msg.nodeId, x: msg.x, y: msg.y, width: msg.width, height: msg.height };
+  points = [];
+  lastMask = null;
 
   const blob = new Blob([new Uint8Array(msg.imageBytes)], { type: 'image/png' });
   currentImageBitmap = await createImageBitmap(blob);
@@ -94,5 +96,78 @@ async function openMagicLayerEditor(msg) {
   canvas.getContext('2d').drawImage(currentImageBitmap, 0, 0, canvas.width, canvas.height);
 
   document.getElementById('editor').classList.remove('hidden');
-  setStatus('이미지 준비됨');
+  setStatus('이미지 인코딩 중...');
+
+  const buf = await blob.arrayBuffer();
+  getSamWorker().postMessage({ type: 'segment', data: buf });
 }
+
+let samWorker = null;
+let points = [];
+let lastMask = null;
+
+function getSamWorker() {
+  if (!samWorker) {
+    samWorker = new Worker('http://localhost:3457/sam-worker.js', { type: 'module' });
+    samWorker.onmessage = handleSamMessage;
+  }
+  return samWorker;
+}
+
+let lastFailedMessage = null;
+
+function handleSamMessage(e) {
+  const msg = e.data;
+  if (msg.type === 'ready') {
+    setStatus('SAM 모델 준비됨 (최초 1회는 모델 다운로드로 시간이 걸릴 수 있어요)');
+  } else if (msg.type === 'segment_result') {
+    if (msg.data === 'start') setStatus('이미지 인코딩 중...');
+    if (msg.data === 'done') setStatus('오브젝트를 클릭하세요 (Shift+클릭 = 마이너스 포인트)');
+  } else if (msg.type === 'decode_result') {
+    lastMask = msg.data.mask;
+    drawMaskOverlay(msg.data.mask);
+  } else if (msg.type === 'error') {
+    lastFailedMessage = msg.retry;
+    setStatus(`모델 처리 중 오류가 발생했어요: ${msg.message}`);
+    document.getElementById('sam-retry-btn').classList.remove('hidden');
+  }
+}
+
+document.getElementById('sam-retry-btn').addEventListener('click', () => {
+  if (!lastFailedMessage) return;
+  document.getElementById('sam-retry-btn').classList.add('hidden');
+  setStatus('재시도 중...');
+  getSamWorker().postMessage(lastFailedMessage);
+});
+
+function drawMaskOverlay(mask) {
+  const canvas = document.getElementById('editor-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(currentImageBitmap, 0, 0, canvas.width, canvas.height);
+
+  const maskCanvas = document.createElement('canvas');
+  maskCanvas.width = mask.width;
+  maskCanvas.height = mask.height;
+  const maskCtx = maskCanvas.getContext('2d');
+  const imageData = maskCtx.createImageData(mask.width, mask.height);
+  for (let i = 0; i < mask.width * mask.height; i++) {
+    const on = mask.data[i] > 0;
+    imageData.data[i * 4 + 0] = 255;
+    imageData.data[i * 4 + 1] = 0;
+    imageData.data[i * 4 + 2] = 128;
+    imageData.data[i * 4 + 3] = on ? 120 : 0;
+  }
+  maskCtx.putImageData(imageData, 0, 0);
+  ctx.drawImage(maskCanvas, 0, 0, canvas.width, canvas.height);
+}
+
+document.getElementById('editor-canvas').addEventListener('click', (e) => {
+  if (!currentImageBitmap) return;
+  const canvas = e.target;
+  const rect = canvas.getBoundingClientRect();
+  const xNorm = (e.clientX - rect.left) / rect.width;
+  const yNorm = (e.clientY - rect.top) / rect.height;
+  const label = e.shiftKey ? 0 : 1;
+  points.push({ point: [xNorm, yNorm], label });
+  getSamWorker().postMessage({ type: 'decode', data: points });
+});
