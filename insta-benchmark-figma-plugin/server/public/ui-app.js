@@ -88,23 +88,40 @@ document.getElementById('cancel-btn').addEventListener('click', () => {
   currentImageBitmap = null;
 });
 
-let samWorker = null;
+let samWorkerPromise = null;
 let points = [];
 let lastMask = null;
 
-async function getSamWorker() {
-  if (!samWorker) {
+function getSamWorker() {
+  if (!samWorkerPromise) {
     // Figma plugin UI iframes have an opaque origin, and the Worker constructor's
     // top-level script fetch is forced to same-origin mode, so a cross-origin
     // `new Worker('http://localhost:3457/sam-worker.js')` throws SecurityError.
     // Work around it by fetching the script as text and constructing the worker
     // from a same-origin blob: URL instead.
-    const src = await (await fetch('http://localhost:3457/sam-worker.js')).text();
-    const blob = new Blob([src], { type: 'text/javascript' });
-    samWorker = new Worker(URL.createObjectURL(blob), { type: 'module' });
-    samWorker.onmessage = handleSamMessage;
+    //
+    // The in-flight promise itself (not the resolved worker) is memoized so
+    // concurrent callers all await the same creation instead of racing past
+    // the `if (!samWorkerPromise)` guard and spawning duplicate workers.
+    samWorkerPromise = (async () => {
+      try {
+        const src = await (await fetch('http://localhost:3457/sam-worker.js')).text();
+        const blob = new Blob([src], { type: 'text/javascript' });
+        const objectUrl = URL.createObjectURL(blob);
+        const worker = new Worker(objectUrl, { type: 'module' });
+        worker.onmessage = handleSamMessage;
+        worker.onerror = (event) => {
+          setStatus('SAM 워커 로드 실패: ' + (event.message || event));
+        };
+        URL.revokeObjectURL(objectUrl);
+        return worker;
+      } catch (err) {
+        samWorkerPromise = null;
+        throw err;
+      }
+    })();
   }
-  return samWorker;
+  return samWorkerPromise;
 }
 
 let lastFailedMessage = null;
