@@ -1,0 +1,20 @@
+{
+  "name": "인스타 벤치마킹",
+  "id": "insta-benchmark-plugin",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": ["figma"],
+  "networkAccess": {
+    "allowedDomains": [
+      "http://localhost:3457",
+      "https://*.cdninstagram.com",
+      "https://*.fbcdn.net",
+      "https://cdn.jsdelivr.net",
+      "https://huggingface.co",
+      "https://*.hf.co",
+      "https://cdn-lfs.huggingface.co",
+      "https://cdn-lfs-us-1.huggingface.co"
+    ]
+  }
+}
