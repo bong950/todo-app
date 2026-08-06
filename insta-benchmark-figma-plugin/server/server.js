@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { chromium } = require('playwright');
 const { parseInstagramHtml } = require('./parse-instagram');
 
 const PORT = 3457;
@@ -38,19 +39,50 @@ function serveStatic(res, pathname) {
   });
 }
 
-async function fetchInstagramHtml(url) {
-  const res = await fetch(url, {
-    headers: {
-      'User-Agent':
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-    },
-    signal: AbortSignal.timeout(15000),
-    redirect: 'manual',
-  });
-  if (!res.ok) {
-    throw new Error(`INSTAGRAM_FETCH_FAILED:${res.status}`);
+let browserPromise = null;
+
+function getBrowser() {
+  if (!browserPromise) {
+    browserPromise = chromium.launch({ headless: true });
   }
-  return res.text();
+  return browserPromise;
+}
+
+async function fetchInstagramHtml(url) {
+  // Instagram serves a generic login/challenge shell (no og:image) to plain
+  // HTTP requests like fetch()/curl — it fingerprints the TLS handshake and
+  // header set, not just the User-Agent string. A real (headless) browser
+  // engine gets the actual server-rendered post page instead.
+  const browser = await getBrowser();
+  const context = await browser.newContext({
+    userAgent:
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+    viewport: { width: 1280, height: 800 },
+  });
+  try {
+    const page = await context.newPage();
+    let response;
+    try {
+      response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    } catch (err) {
+      throw new Error(`INSTAGRAM_FETCH_FAILED:${err.message}`);
+    }
+    if (!response || !response.ok()) {
+      throw new Error(`INSTAGRAM_FETCH_FAILED:${response ? response.status() : 'no-response'}`);
+    }
+    // Unlike a raw fetch(), Playwright follows redirects like a real browser.
+    // Re-validate the post-redirect host so an instagram.com URL can't hop
+    // to an arbitrary host and have its content read back through /parse.
+    const finalHost = new URL(page.url()).hostname;
+    if (!/(^|\.)instagram\.com$/.test(finalHost)) {
+      throw new Error(`INSTAGRAM_FETCH_FAILED:redirected-off-instagram:${finalHost}`);
+    }
+    // Give Instagram's SSR meta tags a moment to settle after initial load.
+    await page.waitForTimeout(1500);
+    return await page.content();
+  } finally {
+    await context.close();
+  }
 }
 
 async function handleParse(req, res, parsedUrl) {

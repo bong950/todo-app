@@ -13,6 +13,7 @@
 cd insta-benchmark-figma-plugin
 npm install
 npm run vendor:sam
+npx playwright install chromium
 ```
 
 ## 실행 방법
@@ -43,6 +44,7 @@ npm run server
 ## 알아두면 좋은 점
 
 - 로컬 서버가 꺼져 있으면 두 기능 모두 동작하지 않습니다 (플러그인 UI 자체도 로컬 서버가 서빙합니다)
+- 게시물 임포트는 내부적으로 헤드리스 Chromium(Playwright)을 띄워 인스타그램 페이지를 가져옵니다 (인스타그램이 단순 HTTP 요청은 로그인 안내 페이지로 막기 때문). 링크 하나 가져오는 데 3~6초 정도 걸리는 게 정상입니다
 - SAM 모델은 최초 실행 시 다운로드되고 이후 브라우저 캐시에 저장되어 오프라인에서도 동작합니다
 - 인스타그램 페이지 구조가 바뀌면 임포트 파싱이 깨질 수 있습니다 (`server/parse-instagram.js` 참고)
 - 개인적인 벤치마킹 용도의 로컬 도구이며, 재배포나 대량 수집 목적이 아닙니다
