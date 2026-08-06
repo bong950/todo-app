@@ -17,6 +17,11 @@ const MIME_TYPES = {
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  // Chrome's Private Network Access policy blocks fetches from a
+  // remote/opaque-origin document (e.g. Figma's plugin UI iframe) to a
+  // loopback address like localhost unless the server explicitly opts in.
+  // Without this, sam-worker.js's own fetch() of this server fails silently.
+  res.setHeader('Access-Control-Allow-Private-Network', 'true');
 }
 
 function serveStatic(res, pathname) {
