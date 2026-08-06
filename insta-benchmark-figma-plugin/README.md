@@ -23,6 +23,8 @@ npm run vendor:sam
 npm run server
 ```
 
+(로컬 서버는 `http://localhost:3457`에서 실행됩니다)
+
 2. Figma 데스크톱 앱에서: 아무 파일이나 열기 → `Plugins` → `Development` → `Import plugin from manifest...` → 이 폴더의 `manifest.json` 선택 (최초 1회만)
 3. `Plugins` → `Development` → `인스타 벤치마킹` 실행
 
