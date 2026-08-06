@@ -108,8 +108,17 @@ async function collectCarouselImages(page) {
   // Only real carousels have a "Next" button; a single-image post has none,
   // and querying document-wide for it would also pick up unrelated
   // "suggested posts" thumbnails elsewhere on the page.
-  const hasCarousel = await page.$('button[aria-label="Next"]');
-  if (!hasCarousel) return [];
+  const nextBtnHandle = await page.$('button[aria-label="Next"]');
+  if (!nextBtnHandle) return [];
+
+  // Lock onto the carousel's own container ONCE, from the Next button we
+  // just confirmed exists, and reuse this same element handle for every
+  // iteration below — including the final one, once Next has disappeared.
+  // Re-deriving "the container" fresh each time by re-querying for the Next
+  // button (as an earlier version of this function did) falls back to a
+  // page-wide selector on that last iteration, which also picks up
+  // unrelated "suggested post" thumbnails elsewhere on the page.
+  const containerHandle = await page.evaluateHandle((btn) => btn.parentElement, nextBtnHandle);
 
   let refPrefix = null;
   const collected = [];
@@ -117,15 +126,13 @@ async function collectCarouselImages(page) {
   const MAX_SLIDES = 12; // Instagram caps real carousels at 10
 
   for (let i = 0; i < MAX_SLIDES; i++) {
-    const imgs = await page.evaluate(() => {
-      const btn = document.querySelector('button[aria-label="Next"]');
-      const container = btn ? btn.parentElement : document.querySelector('main');
+    const imgs = await page.evaluate((container) => {
       if (!container) return [];
       return [...container.querySelectorAll('img[alt^="Photo by"]')].map((img) => ({
         alt: img.alt,
         src: img.currentSrc || img.src,
       }));
-    });
+    }, containerHandle);
 
     // The carousel container can also pick up neighboring "suggested post"
     // thumbnails once a few slides in. Every real slide of THIS post shares
@@ -144,15 +151,15 @@ async function collectCarouselImages(page) {
       }
     }
 
-    const hasNext = await page.$('button[aria-label="Next"]');
+    const hasNext = await containerHandle.$('button[aria-label="Next"]');
     if (!hasNext) break;
     // A login-nag overlay sits on top of the Next button for logged-out
     // sessions and blocks a real Playwright click; dispatching the click
     // directly on the button element bypasses that visual obstruction.
-    await page.evaluate(() => {
-      const btn = document.querySelector('button[aria-label="Next"]');
+    await page.evaluate((container) => {
+      const btn = container.querySelector('button[aria-label="Next"]');
       if (btn) btn.click();
-    });
+    }, containerHandle);
     await page.waitForTimeout(1000);
   }
 
