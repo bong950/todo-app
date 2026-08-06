@@ -79,10 +79,79 @@ async function fetchInstagramHtml(url) {
     }
     // Give Instagram's SSR meta tags a moment to settle after initial load.
     await page.waitForTimeout(1500);
-    return await page.content();
+
+    const carouselImages = await collectCarouselImages(page);
+
+    let html = await page.content();
+    if (carouselImages.length > 0) {
+      // parse-instagram.js's extractCarouselImages already looks for this
+      // exact "display_url" JSON pattern (it used to come from Instagram's
+      // own page-embedded JSON; that's gone from current markup, so we
+      // collect the images ourselves via live carousel navigation below and
+      // splice them back in using the same, already-tested pattern instead
+      // of touching the parser).
+      const injected = JSON.stringify(carouselImages.map((src) => ({ display_url: src })));
+      html += `<script>window.__carouselItems = ${injected};</script>`;
+    }
+    return html;
   } finally {
     await context.close();
   }
+}
+
+async function collectCarouselImages(page) {
+  // Only real carousels have a "Next" button; a single-image post has none,
+  // and querying document-wide for it would also pick up unrelated
+  // "suggested posts" thumbnails elsewhere on the page.
+  const hasCarousel = await page.$('button[aria-label="Next"]');
+  if (!hasCarousel) return [];
+
+  let refPrefix = null;
+  const collected = [];
+  const seen = new Set();
+  const MAX_SLIDES = 12; // Instagram caps real carousels at 10
+
+  for (let i = 0; i < MAX_SLIDES; i++) {
+    const imgs = await page.evaluate(() => {
+      const btn = document.querySelector('button[aria-label="Next"]');
+      const container = btn ? btn.parentElement : document.querySelector('main');
+      if (!container) return [];
+      return [...container.querySelectorAll('img[alt^="Photo by"]')].map((img) => ({
+        alt: img.alt,
+        src: img.currentSrc || img.src,
+      }));
+    });
+
+    // The carousel container can also pick up neighboring "suggested post"
+    // thumbnails once a few slides in. Every real slide of THIS post shares
+    // the same "Photo by {author} on {date}." alt prefix (the post's own
+    // publish date) — lock onto it from the first slide and filter by it.
+    if (refPrefix === null && imgs.length) {
+      const m = imgs[0].alt.match(/^(Photo by .+? on [^.]+\.)/);
+      refPrefix = m ? m[1] : imgs[0].alt;
+    }
+
+    for (const img of imgs) {
+      if (refPrefix && !img.alt.startsWith(refPrefix)) continue;
+      if (!seen.has(img.src)) {
+        seen.add(img.src);
+        collected.push(img.src);
+      }
+    }
+
+    const hasNext = await page.$('button[aria-label="Next"]');
+    if (!hasNext) break;
+    // A login-nag overlay sits on top of the Next button for logged-out
+    // sessions and blocks a real Playwright click; dispatching the click
+    // directly on the button element bypasses that visual obstruction.
+    await page.evaluate(() => {
+      const btn = document.querySelector('button[aria-label="Next"]');
+      if (btn) btn.click();
+    });
+    await page.waitForTimeout(1000);
+  }
+
+  return collected;
 }
 
 async function handleParse(req, res, parsedUrl) {
