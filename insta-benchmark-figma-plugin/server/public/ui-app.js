@@ -18,6 +18,8 @@ window.onmessage = (event) => {
     setStatus(msg.message);
   } else if (msg.type === 'selection-state') {
     magicLayerBtn.disabled = !msg.hasImageFill;
+  } else if (msg.type === 'magic-layer-done') {
+    setStatus('레이어 분리 완료!');
   }
 };
 
@@ -170,4 +172,65 @@ document.getElementById('editor-canvas').addEventListener('click', (e) => {
   const label = e.shiftKey ? 0 : 1;
   points.push({ point: [xNorm, yNorm], label });
   getSamWorker().postMessage({ type: 'decode', data: points });
+});
+
+async function imageDataToPngBytes(imageData) {
+  const canvas = document.createElement('canvas');
+  canvas.width = imageData.width;
+  canvas.height = imageData.height;
+  canvas.getContext('2d').putImageData(imageData, 0, 0);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
+document.getElementById('extract-btn').addEventListener('click', async () => {
+  if (!lastMask || !currentImageBitmap || !sourceNodeMeta) {
+    setStatus('먼저 오브젝트를 클릭해서 마스크를 만들어주세요.');
+    return;
+  }
+
+  setStatus('레이어 분리 중...');
+
+  const w = currentImageBitmap.width;
+  const h = currentImageBitmap.height;
+
+  const srcCanvas = document.createElement('canvas');
+  srcCanvas.width = w;
+  srcCanvas.height = h;
+  const srcCtx = srcCanvas.getContext('2d');
+  srcCtx.drawImage(currentImageBitmap, 0, 0);
+  const srcData = srcCtx.getImageData(0, 0, w, h);
+
+  const cutoutData = new ImageData(new Uint8ClampedArray(srcData.data), w, h);
+  const bgData = new ImageData(new Uint8ClampedArray(srcData.data), w, h);
+
+  for (let i = 0; i < w * h; i++) {
+    const maskOn = lastMask.data[i] > 0;
+    if (maskOn) {
+      bgData.data[i * 4 + 3] = 0;
+    } else {
+      cutoutData.data[i * 4 + 3] = 0;
+    }
+  }
+
+  const cutoutBytes = await imageDataToPngBytes(cutoutData);
+  const bgBytes = await imageDataToPngBytes(bgData);
+
+  parent.postMessage(
+    {
+      pluginMessage: {
+        type: 'apply-magic-layer',
+        nodeId: sourceNodeMeta.nodeId,
+        x: sourceNodeMeta.x,
+        y: sourceNodeMeta.y,
+        width: sourceNodeMeta.width,
+        height: sourceNodeMeta.height,
+        cutoutBytes: Array.from(cutoutBytes),
+        backgroundBytes: Array.from(bgBytes),
+      },
+    },
+    '*',
+  );
+
+  document.getElementById('editor').classList.add('hidden');
 });

@@ -21,6 +21,8 @@ figma.ui.onmessage = async (msg) => {
     await handleImportPost(msg);
   } else if (msg.type === 'request-magic-layer') {
     await handleMagicLayerRequest();
+  } else if (msg.type === 'apply-magic-layer') {
+    await handleApplyMagicLayer(msg);
   }
 };
 
@@ -90,4 +92,31 @@ async function handleImportPost({ images, caption, author }) {
   figma.viewport.scrollAndZoomIntoView([frame]);
 
   figma.ui.postMessage({ type: 'import-done', frameId: frame.id });
+}
+
+async function handleApplyMagicLayer(msg) {
+  const { nodeId, x, y, width, height, cutoutBytes, backgroundBytes } = msg;
+  const originalNode = await figma.getNodeByIdAsync(nodeId);
+  if (!originalNode) {
+    figma.ui.postMessage({ type: 'magic-layer-error', message: '원본 레이어를 찾을 수 없어요 (삭제되었을 수 있어요).' });
+    return;
+  }
+
+  const bgImage = figma.createImage(new Uint8Array(backgroundBytes));
+  originalNode.fills = [{ type: 'IMAGE', imageHash: bgImage.hash, scaleMode: 'FILL' }];
+
+  const cutoutImage = figma.createImage(new Uint8Array(cutoutBytes));
+  const rect = figma.createRectangle();
+  rect.resize(width, height);
+  rect.x = x;
+  rect.y = y;
+  rect.fills = [{ type: 'IMAGE', imageHash: cutoutImage.hash, scaleMode: 'FILL' }];
+  rect.name = '분리된 오브젝트';
+
+  const parentNode = originalNode.parent || figma.currentPage;
+  parentNode.appendChild(rect);
+  figma.currentPage.selection = [rect];
+  figma.viewport.scrollAndZoomIntoView([rect]);
+
+  figma.ui.postMessage({ type: 'magic-layer-done' });
 }
